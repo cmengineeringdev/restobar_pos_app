@@ -1,62 +1,41 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_theme.dart';
-import '../../../core/injection/injection_container.dart';
+import '../../../core/providers/point_of_sale_state_notifier.dart';
+import '../../../core/providers/table_state_notifier.dart';
 import '../../../domain/entities/point_of_sale.dart';
-import '../../../domain/usecases/get_points_of_sale.dart';
-import '../../../domain/usecases/select_point_of_sale.dart';
 import '../home/home_page.dart';
 
-class SelectPointOfSalePage extends StatefulWidget {
+class SelectPointOfSalePage extends ConsumerStatefulWidget {
   const SelectPointOfSalePage({super.key});
 
   @override
-  State<SelectPointOfSalePage> createState() => _SelectPointOfSalePageState();
+  ConsumerState<SelectPointOfSalePage> createState() =>
+      _SelectPointOfSalePageState();
 }
 
-class _SelectPointOfSalePageState extends State<SelectPointOfSalePage> {
-  final InjectionContainer _container = InjectionContainer();
-  late final GetPointsOfSale _getPointsOfSale;
-  late final SelectPointOfSale _selectPointOfSale;
-
-  List<PointOfSale> _pointsOfSale = [];
-  bool _isLoading = true;
-  PointOfSale? _selectedPos;
-
+class _SelectPointOfSalePageState
+    extends ConsumerState<SelectPointOfSalePage> {
   @override
   void initState() {
     super.initState();
-    _getPointsOfSale = _container.getPointsOfSale;
-    _selectPointOfSale = _container.selectPointOfSale;
-    _loadPointsOfSale();
-  }
-
-  Future<void> _loadPointsOfSale() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final pointsOfSale = await _getPointsOfSale();
-      setState(() {
-        _pointsOfSale = pointsOfSale;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Error al cargar los puntos de venta: $e'),
-            backgroundColor: AppTheme.errorColor,
-          ),
-        );
-      }
-    }
+    // Load points of sale when the page is initialized
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      ref.read(pointOfSaleStateProvider.notifier).loadPointsOfSale();
+    });
   }
 
   Future<void> _handleSelection(PointOfSale pos) async {
-    setState(() => _selectedPos = pos);
-
     try {
-      await _selectPointOfSale(pos);
+      // Seleccionar punto de venta
+      await ref.read(pointOfSaleStateProvider.notifier).selectPointOfSale(pos);
+
+      // Crear las mesas para el punto de venta basado en numberOfTables
+      print('DEBUG: Creando ${pos.numberOfTables} mesas para punto de venta ${pos.id}');
+      await ref.read(tableStateProvider.notifier).createTablesForPointOfSale(
+            pos.id,
+            pos.numberOfTables,
+          );
 
       if (mounted) {
         // Navigate to home page
@@ -72,7 +51,7 @@ class _SelectPointOfSalePageState extends State<SelectPointOfSalePage> {
         );
       }
     } catch (e) {
-      setState(() => _selectedPos = null);
+      print('DEBUG: Error al seleccionar punto de venta: $e');
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -86,15 +65,17 @@ class _SelectPointOfSalePageState extends State<SelectPointOfSalePage> {
 
   @override
   Widget build(BuildContext context) {
+    final posState = ref.watch(pointOfSaleStateProvider);
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
-      body: _isLoading
+      body: posState.isLoading
           ? const Center(
               child: CircularProgressIndicator(
                 color: AppTheme.primaryColor,
               ),
             )
-          : _pointsOfSale.isEmpty
+          : posState.availablePointsOfSale.isEmpty
               ? Center(
                   child: Column(
                     mainAxisAlignment: MainAxisAlignment.center,
@@ -105,16 +86,18 @@ class _SelectPointOfSalePageState extends State<SelectPointOfSalePage> {
                         color: AppTheme.textDisabled,
                       ),
                       const SizedBox(height: 16),
-                      const Text(
-                        'No hay puntos de venta disponibles',
-                        style: TextStyle(
+                      Text(
+                        posState.error ?? 'No hay puntos de venta disponibles',
+                        style: const TextStyle(
                           fontSize: 18,
                           color: AppTheme.textSecondary,
                         ),
                       ),
                       const SizedBox(height: 16),
                       ElevatedButton.icon(
-                        onPressed: _loadPointsOfSale,
+                        onPressed: () => ref
+                            .read(pointOfSaleStateProvider.notifier)
+                            .loadPointsOfSale(),
                         style: ElevatedButton.styleFrom(
                           backgroundColor: AppTheme.primaryColor,
                           foregroundColor: Colors.white,
@@ -147,9 +130,11 @@ class _SelectPointOfSalePageState extends State<SelectPointOfSalePage> {
                         ),
                       ),
                       const SizedBox(height: 24),
-                      ...List.generate(_pointsOfSale.length, (index) {
-                        final pos = _pointsOfSale[index];
-                        final isSelected = _selectedPos?.id == pos.id;
+                      ...List.generate(posState.availablePointsOfSale.length,
+                          (index) {
+                        final pos = posState.availablePointsOfSale[index];
+                        final isSelected =
+                            posState.selectedPointOfSale?.id == pos.id;
 
                         return Padding(
                           padding: const EdgeInsets.only(bottom: 12),

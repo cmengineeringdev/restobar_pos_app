@@ -30,7 +30,7 @@ class DatabaseService {
     Database db = await databaseFactoryFfi.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 3, // Incrementado para agregar tabla point_of_sale
+        version: 8, // Incrementado para agregar tabla payments
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       ),
@@ -87,6 +87,129 @@ class DatabaseService {
         selected_at TEXT NOT NULL
       )
     ''');
+
+    // Work Shifts table
+    await db.execute('''
+      CREATE TABLE work_shifts (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        remote_id INTEGER UNIQUE,
+        open_date TEXT NOT NULL,
+        close_date TEXT,
+        company_id INTEGER NOT NULL,
+        point_of_sale_id INTEGER NOT NULL,
+        user_id TEXT,
+        is_active INTEGER DEFAULT 1
+      )
+    ''');
+
+    // Index for better work shift queries
+    await db.execute('''
+      CREATE INDEX idx_work_shift_is_active ON work_shifts(is_active)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_work_shift_point_of_sale ON work_shifts(point_of_sale_id)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_work_shift_remote_id ON work_shifts(remote_id)
+    ''');
+
+    // Tables (mesas) table
+    await db.execute('''
+      CREATE TABLE tables (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        number TEXT NOT NULL,
+        capacity INTEGER NOT NULL DEFAULT 4,
+        status TEXT NOT NULL DEFAULT 'available',
+        point_of_sale_id INTEGER NOT NULL,
+        created_at TEXT NOT NULL,
+        updated_at TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_table_point_of_sale ON tables(point_of_sale_id)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_table_status ON tables(status)
+    ''');
+
+    // Orders table
+    await db.execute('''
+      CREATE TABLE orders (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        table_id INTEGER NOT NULL,
+        work_shift_id INTEGER NOT NULL,
+        status TEXT NOT NULL DEFAULT 'open',
+        subtotal REAL NOT NULL DEFAULT 0,
+        tax REAL NOT NULL DEFAULT 0,
+        total REAL NOT NULL DEFAULT 0,
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        closed_at TEXT
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_order_table ON orders(table_id)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_order_work_shift ON orders(work_shift_id)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_order_status ON orders(status)
+    ''');
+
+    // Order Items table
+    await db.execute('''
+      CREATE TABLE order_items (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        product_id INTEGER NOT NULL,
+        product_name TEXT NOT NULL,
+        quantity INTEGER NOT NULL DEFAULT 1,
+        unit_price REAL NOT NULL,
+        subtotal REAL NOT NULL,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_order_item_order ON order_items(order_id)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_order_item_product ON order_items(product_id)
+    ''');
+
+    // Payments table
+    await db.execute('''
+      CREATE TABLE payments (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        order_id INTEGER NOT NULL,
+        payment_method TEXT NOT NULL,
+        amount REAL NOT NULL,
+        status TEXT NOT NULL DEFAULT 'completed',
+        notes TEXT,
+        created_at TEXT NOT NULL,
+        updated_at TEXT,
+        FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+      )
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_payment_order ON payments(order_id)
+    ''');
+
+    await db.execute('''
+      CREATE INDEX idx_payment_status ON payments(status)
+    ''');
   }
 
   /// Handle database version upgrades
@@ -137,6 +260,142 @@ class DatabaseService {
           created_at TEXT NOT NULL,
           selected_at TEXT NOT NULL
         )
+      ''');
+    }
+
+    // Migration from version 3 to 4: Add work_shifts table
+    if (oldVersion < 4) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS work_shifts (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          remote_id INTEGER UNIQUE,
+          open_date TEXT NOT NULL,
+          close_date TEXT,
+          company_id INTEGER NOT NULL,
+          point_of_sale_id INTEGER NOT NULL,
+          user_id TEXT,
+          is_active INTEGER DEFAULT 1
+        )
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_work_shift_is_active ON work_shifts(is_active)
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_work_shift_point_of_sale ON work_shifts(point_of_sale_id)
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_work_shift_remote_id ON work_shifts(remote_id)
+      ''');
+    }
+
+    // Migration from version 4 to 5: Add tables table
+    if (oldVersion < 5) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS tables (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          number TEXT NOT NULL,
+          capacity INTEGER NOT NULL DEFAULT 4,
+          status TEXT NOT NULL DEFAULT 'available',
+          point_of_sale_id INTEGER NOT NULL,
+          created_at TEXT NOT NULL,
+          updated_at TEXT
+        )
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_table_point_of_sale ON tables(point_of_sale_id)
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_table_status ON tables(status)
+      ''');
+    }
+
+    // Migration from version 5 to 6: Add orders and order_items tables
+    if (oldVersion < 6) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS orders (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          table_id INTEGER NOT NULL,
+          work_shift_id INTEGER NOT NULL,
+          status TEXT NOT NULL DEFAULT 'open',
+          subtotal REAL NOT NULL DEFAULT 0,
+          tax REAL NOT NULL DEFAULT 0,
+          total REAL NOT NULL DEFAULT 0,
+          notes TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT,
+          closed_at TEXT
+        )
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_order_table ON orders(table_id)
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_order_work_shift ON orders(work_shift_id)
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_order_status ON orders(status)
+      ''');
+
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS order_items (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          order_id INTEGER NOT NULL,
+          product_id INTEGER NOT NULL,
+          product_name TEXT NOT NULL,
+          quantity INTEGER NOT NULL DEFAULT 1,
+          unit_price REAL NOT NULL,
+          subtotal REAL NOT NULL,
+          created_at TEXT NOT NULL,
+          FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+        )
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_order_item_order ON order_items(order_id)
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_order_item_product ON order_items(product_id)
+      ''');
+    }
+
+    // Migration from version 6 to 7: Add notes column to orders
+    if (oldVersion < 7 && oldVersion >= 6) {
+      await db.execute('''
+        ALTER TABLE orders ADD COLUMN notes TEXT
+      ''');
+    }
+
+    // Migration from version 7 to 8: Add payments table
+    if (oldVersion < 8) {
+      await db.execute('''
+        CREATE TABLE IF NOT EXISTS payments (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          order_id INTEGER NOT NULL,
+          payment_method TEXT NOT NULL,
+          amount REAL NOT NULL,
+          status TEXT NOT NULL DEFAULT 'completed',
+          notes TEXT,
+          created_at TEXT NOT NULL,
+          updated_at TEXT,
+          FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
+        )
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_payment_order ON payments(order_id)
+      ''');
+
+      await db.execute('''
+        CREATE INDEX IF NOT EXISTS idx_payment_status ON payments(status)
       ''');
     }
   }

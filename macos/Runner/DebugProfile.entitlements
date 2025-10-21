@@ -2,10 +2,19 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- App Sandbox -->
 	<key>com.apple.security.app-sandbox</key>
 	<true/>
+	
+	<!-- JIT para mejor rendimiento de Flutter/Dart -->
 	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
+	
+	<!-- Acceso de red cliente (peticiones HTTP a la API) -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	
+	<!-- Servidor de red para hot reload y debugging -->
 	<key>com.apple.security.network.server</key>
 	<true/>
 </dict>

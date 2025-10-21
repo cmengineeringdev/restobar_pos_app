@@ -1,35 +1,33 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_theme.dart';
 import '../../../core/injection/injection_container.dart';
-import '../../../domain/usecases/login_user.dart';
+import '../../../core/providers/auth_state_notifier.dart';
 import '../../widgets/custom_button.dart';
 import '../../widgets/custom_text_field.dart';
 import '../home/home_page.dart';
 import '../point_of_sale/select_point_of_sale_page.dart';
 
-class LoginPage extends StatefulWidget {
+class LoginPage extends ConsumerStatefulWidget {
   const LoginPage({super.key});
 
   @override
-  State<LoginPage> createState() => _LoginPageState();
+  ConsumerState<LoginPage> createState() => _LoginPageState();
 }
 
-class _LoginPageState extends State<LoginPage> {
+class _LoginPageState extends ConsumerState<LoginPage> {
   final InjectionContainer _container = InjectionContainer();
-  late final LoginUser _loginUser;
 
   final _formKey = GlobalKey<FormState>();
   final _usernameController = TextEditingController();
   final _passwordController = TextEditingController();
   final _companyCodeController = TextEditingController();
 
-  bool _isLoading = false;
   bool _obscurePassword = true;
 
   @override
   void initState() {
     super.initState();
-    _loginUser = _container.loginUser;
   }
 
   @override
@@ -45,48 +43,49 @@ class _LoginPageState extends State<LoginPage> {
       return;
     }
 
-    setState(() => _isLoading = true);
-
     try {
-      final user = await _loginUser(
-        _usernameController.text.trim(),
-        _passwordController.text,
-        _companyCodeController.text.trim(),
+      // Use AuthStateNotifier to handle login
+      await ref.read(authStateProvider.notifier).login(
+            _usernameController.text.trim(),
+            _passwordController.text,
+            _companyCodeController.text.trim(),
+          );
+
+      if (!mounted) return;
+      
+      final authState = ref.read(authStateProvider);
+      
+      // Check if point of sale is already selected
+      final selectedPos = await _container.getSelectedPointOfSale.call();
+
+      if (!mounted) return;
+
+      // Show success message
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Bienvenido, ${authState.user?.fullName ?? "Usuario"}'),
+          backgroundColor: AppTheme.primaryColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+          ),
+        ),
       );
 
-      if (mounted) {
-        // Check if point of sale is already selected
-        final selectedPos = await _container.getSelectedPointOfSale();
-
-        // Show success message
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Bienvenido, ${user.fullName}'),
-            backgroundColor: AppTheme.primaryColor,
-            behavior: SnackBarBehavior.floating,
-            shape: RoundedRectangleBorder(
-              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-            ),
-          ),
+      // Navigate based on point of sale selection
+      if (selectedPos == null) {
+        // No point of sale selected -> go to selection screen
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(
+              builder: (context) => const SelectPointOfSalePage()),
         );
-
-        // Navigate based on point of sale selection
-        if (selectedPos == null) {
-          // No point of sale selected -> go to selection screen
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(
-                builder: (context) => const SelectPointOfSalePage()),
-          );
-        } else {
-          // Point of sale already selected -> go to home
-          Navigator.of(context).pushReplacement(
-            MaterialPageRoute(builder: (context) => const HomePage()),
-          );
-        }
+      } else {
+        // Point of sale already selected -> go to home
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const HomePage()),
+        );
       }
     } catch (e) {
-      setState(() => _isLoading = false);
-
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
@@ -105,6 +104,7 @@ class _LoginPageState extends State<LoginPage> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authStateProvider);
     final size = MediaQuery.of(context).size;
     final isDesktop = size.width > 600;
 
@@ -143,7 +143,7 @@ class _LoginPageState extends State<LoginPage> {
                         Expanded(
                           child: ConstrainedBox(
                             constraints: const BoxConstraints(maxWidth: 500),
-                            child: _buildLoginForm(),
+                            child: _buildLoginForm(authState),
                           ),
                         ),
                       ],
@@ -248,7 +248,7 @@ class _LoginPageState extends State<LoginPage> {
     );
   }
 
-  Widget _buildLoginForm() {
+  Widget _buildLoginForm(AuthState authState) {
     return Card(
       elevation: 0,
       color: AppTheme.surfaceColor,
@@ -402,7 +402,7 @@ class _LoginPageState extends State<LoginPage> {
                   CustomButton(
                     text: 'Iniciar Sesión',
                     onPressed: _handleLogin,
-                    isLoading: _isLoading,
+                    isLoading: authState.isLoading,
                     icon: Icons.login,
                     width: double.infinity,
                   ),

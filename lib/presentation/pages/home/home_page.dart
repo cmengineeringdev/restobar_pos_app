@@ -1,122 +1,118 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_theme.dart';
-import '../../../core/injection/injection_container.dart';
-import '../../../domain/entities/product.dart';
-import '../../../domain/entities/user.dart';
-import '../../../domain/usecases/get_all_products.dart';
-import '../../../domain/usecases/get_current_user.dart';
-import '../../../domain/usecases/logout_user.dart';
-import '../../../domain/usecases/search_products.dart';
-import '../../../domain/usecases/sync_products.dart';
-import '../../widgets/custom_button.dart';
-import '../../widgets/product_card.dart';
+import '../../../core/providers/auth_state_notifier.dart';
+import '../../../core/providers/point_of_sale_state_notifier.dart';
+import '../../../core/providers/product_state_notifier.dart';
+import '../../../core/providers/work_shift_state_notifier.dart';
 import '../auth/login_page.dart';
+import '../tables/tables_page.dart';
+import '../work_shift/work_shift_page.dart';
 
-class HomePage extends StatefulWidget {
+class HomePage extends ConsumerStatefulWidget {
   const HomePage({super.key});
 
   @override
-  State<HomePage> createState() => _HomePageState();
+  ConsumerState<HomePage> createState() => _HomePageState();
 }
 
-class _HomePageState extends State<HomePage> {
-  final InjectionContainer _container = InjectionContainer();
-  late final GetAllProducts _getAllProducts;
-  late final SearchProducts _searchProducts;
-  late final SyncProducts _syncProducts;
-  late final GetCurrentUser _getCurrentUser;
-  late final LogoutUser _logoutUser;
-
-  List<Product> _products = [];
-  User? _currentUser;
-  bool _isLoading = true;
-  bool _isSyncing = false;
-  final TextEditingController _searchController = TextEditingController();
-
+class _HomePageState extends ConsumerState<HomePage> {
   @override
   void initState() {
     super.initState();
-    _getAllProducts = _container.getAllProducts;
-    _searchProducts = _container.searchProducts;
-    _syncProducts = _container.syncProducts;
-    _getCurrentUser = _container.getCurrentUser;
-    _logoutUser = _container.logoutUser;
-    _loadUserAndProducts();
+    // Load current user and work shift when page initializes
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _loadInitialData();
+    });
   }
 
-  Future<void> _loadUserAndProducts() async {
-    // Load user first
-    _currentUser = await _getCurrentUser();
-    // Then load products
-    _loadProducts();
-  }
+  Future<void> _loadInitialData() async {
+    // Cargar usuario
+    await ref.read(authStateProvider.notifier).loadCurrentUser();
 
-  @override
-  void dispose() {
-    _searchController.dispose();
-    super.dispose();
-  }
-
-  Future<void> _loadProducts() async {
-    setState(() => _isLoading = true);
-
-    try {
-      final products = await _getAllProducts();
-      setState(() {
-        _products = products;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        _showErrorSnackBar('Error al cargar productos: $e');
-      }
-    }
-  }
-
-  Future<void> _searchProductsHandler(String searchTerm) async {
-    if (searchTerm.isEmpty) {
-      _loadProducts();
-      return;
-    }
-
-    setState(() => _isLoading = true);
-
-    try {
-      final products = await _searchProducts(searchTerm);
-      setState(() {
-        _products = products;
-        _isLoading = false;
-      });
-    } catch (e) {
-      setState(() => _isLoading = false);
-      if (mounted) {
-        _showErrorSnackBar('Error al buscar productos: $e');
+    // Cargar punto de venta y verificar turno activo
+    await ref.read(pointOfSaleStateProvider.notifier).loadSelectedPointOfSale();
+    final pointOfSaleState = ref.read(pointOfSaleStateProvider);
+    
+    if (pointOfSaleState.selectedPointOfSale != null) {
+      try {
+        await ref.read(workShiftStateProvider.notifier).checkActiveWorkShiftRemote(
+              pointOfSaleState.selectedPointOfSale!.id,
+            );
+      } catch (e) {
+        // Error al verificar turno, no hacer nada
       }
     }
   }
 
   Future<void> _syncProductsFromApi() async {
-    setState(() => _isSyncing = true);
-
     try {
-      final products = await _syncProducts();
-      setState(() {
-        _products = products;
-        _isSyncing = false;
-        _searchController.clear();
-      });
+      await ref.read(productStateProvider.notifier).syncProducts();
 
       if (mounted) {
-        _showSuccessSnackBar(
-            '${products.length} productos sincronizados exitosamente');
+        final productState = ref.read(productStateProvider);
+        if (productState.successMessage != null) {
+          _showSuccessSnackBar(productState.successMessage!);
+        }
       }
     } catch (e) {
-      setState(() => _isSyncing = false);
       if (mounted) {
         _showErrorSnackBar('Error al sincronizar productos: $e');
       }
     }
+  }
+
+  void _showModuleInProgress(String moduleName) {
+    ScaffoldMessenger.of(context).showSnackBar(
+      SnackBar(
+        content: Text('El módulo "$moduleName" está en proceso de desarrollo'),
+        backgroundColor: AppTheme.warningColor,
+        behavior: SnackBarBehavior.floating,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        ),
+        duration: const Duration(seconds: 2),
+      ),
+    );
+  }
+
+  void _navigateToOrders() {
+    final workShiftState = ref.read(workShiftStateProvider);
+    
+    // Validar que hay un turno abierto
+    if (!workShiftState.hasActiveShift) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: const Text('Debe abrir un turno antes de gestionar pedidos'),
+          backgroundColor: AppTheme.warningColor,
+          behavior: SnackBarBehavior.floating,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+          ),
+          action: SnackBarAction(
+            label: 'Abrir Turno',
+            textColor: Colors.white,
+            onPressed: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (context) => const WorkShiftPage(),
+                ),
+              );
+            },
+          ),
+        ),
+      );
+      return;
+    }
+
+    // Si hay turno abierto, navegar a la vista de mesas
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (context) => const TablesPage(),
+      ),
+    );
   }
 
   Future<void> _handleLogout() async {
@@ -157,7 +153,7 @@ class _HomePageState extends State<HomePage> {
     );
 
     if (confirmed == true) {
-      await _logoutUser();
+      await ref.read(authStateProvider.notifier).logout();
       if (mounted) {
         Navigator.of(context).pushReplacement(
           MaterialPageRoute(builder: (context) => const LoginPage()),
@@ -195,16 +191,18 @@ class _HomePageState extends State<HomePage> {
 
   @override
   Widget build(BuildContext context) {
+    final authState = ref.watch(authStateProvider);
+    final productState = ref.watch(productStateProvider);
+    final workShiftState = ref.watch(workShiftStateProvider);
+    final pointOfSaleState = ref.watch(pointOfSaleStateProvider);
+
     return Scaffold(
       backgroundColor: AppTheme.backgroundColor,
-      appBar: _buildAppBar(),
+      appBar: _buildAppBar(authState.user),
       body: Column(
         children: [
-          // Header con búsqueda y estadísticas
-          _buildHeader(),
-
           // Syncing indicator
-          if (_isSyncing)
+          if (productState.isSyncing)
             Container(
               padding: const EdgeInsets.symmetric(
                 horizontal: AppTheme.spacingLarge,
@@ -216,24 +214,20 @@ class _HomePageState extends State<HomePage> {
               ),
             ),
 
-          // Products Grid
-          Expanded(child: _buildProductsGrid()),
+          // Work Shift Status Banner
+          if (pointOfSaleState.selectedPointOfSale != null)
+            _buildWorkShiftBanner(workShiftState, pointOfSaleState.selectedPointOfSale!.name),
+
+          // Module Cards Grid
+          Expanded(child: _buildModulesGrid()),
         ],
       ),
-      floatingActionButton: _isSyncing
-          ? null
-          : FloatingActionButton.extended(
-              onPressed: _syncProductsFromApi,
-              icon: const Icon(Icons.sync),
-              label: const Text('Sincronizar'),
-              backgroundColor: AppTheme.primaryColor,
-              foregroundColor: Colors.white,
-              elevation: 2,
-            ),
     );
   }
 
-  PreferredSizeWidget _buildAppBar() {
+  PreferredSizeWidget _buildAppBar(dynamic currentUser) {
+    final productState = ref.watch(productStateProvider);
+
     return AppBar(
       backgroundColor: AppTheme.surfaceColor,
       elevation: 0,
@@ -268,9 +262,9 @@ class _HomePageState extends State<HomePage> {
                   color: AppTheme.textPrimary,
                 ),
               ),
-              if (_currentUser != null)
+              if (currentUser != null)
                 Text(
-                  _currentUser!.firstName,
+                  currentUser.firstName,
                   style: const TextStyle(
                     fontSize: 12,
                     color: AppTheme.textSecondary,
@@ -285,20 +279,8 @@ class _HomePageState extends State<HomePage> {
         // Sync button
         IconButton(
           icon: const Icon(Icons.cloud_sync, color: AppTheme.primaryColor),
-          onPressed: _isSyncing ? null : _syncProductsFromApi,
-          tooltip: 'Sincronizar desde API',
-        ),
-
-        // Refresh button
-        IconButton(
-          icon: const Icon(Icons.refresh, color: AppTheme.primaryColor),
-          onPressed: _isLoading
-              ? null
-              : () {
-                  _searchController.clear();
-                  _loadProducts();
-                },
-          tooltip: 'Recargar productos',
+          onPressed: productState.isSyncing ? null : _syncProductsFromApi,
+          tooltip: 'Sincronizar productos desde API',
         ),
 
         // User menu
@@ -306,7 +288,7 @@ class _HomePageState extends State<HomePage> {
           icon: CircleAvatar(
             backgroundColor: AppTheme.primaryColor.withOpacity(0.1),
             child: Text(
-              _currentUser?.firstName.substring(0, 1).toUpperCase() ?? 'U',
+              currentUser?.firstName.substring(0, 1).toUpperCase() ?? 'U',
               style: const TextStyle(
                 color: AppTheme.primaryColor,
                 fontWeight: FontWeight.bold,
@@ -320,14 +302,14 @@ class _HomePageState extends State<HomePage> {
           ),
           tooltip: 'Menú de usuario',
           itemBuilder: (context) => [
-            if (_currentUser != null)
+            if (currentUser != null)
               PopupMenuItem<String>(
                 enabled: false,
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      _currentUser!.fullName,
+                      currentUser.fullName,
                       style: const TextStyle(
                         fontWeight: FontWeight.bold,
                         color: AppTheme.textPrimary,
@@ -335,7 +317,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 4),
                     Text(
-                      '@${_currentUser!.username}',
+                      '@${currentUser.username}',
                       style: const TextStyle(
                         fontSize: 12,
                         color: AppTheme.textSecondary,
@@ -343,7 +325,7 @@ class _HomePageState extends State<HomePage> {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      _currentUser!.companyCode,
+                      currentUser.companyCode,
                       style: const TextStyle(
                         fontSize: 11,
                         color: AppTheme.textSecondary,
@@ -376,122 +358,17 @@ class _HomePageState extends State<HomePage> {
     );
   }
 
-  Widget _buildHeader() {
-    return Container(
-      padding: const EdgeInsets.all(AppTheme.spacingLarge),
-      decoration: const BoxDecoration(
-        color: AppTheme.surfaceColor,
-        border: Border(
-          bottom: BorderSide(color: AppTheme.borderColor, width: 1),
-        ),
-      ),
-      child: Column(
-        children: [
-          // Estadísticas
-          Row(
-            children: [
-              Expanded(
-                child: _buildStatCard(
-                  icon: Icons.inventory_2,
-                  label: 'Productos',
-                  value: '${_products.length}',
-                  color: AppTheme.primaryColor,
-                ),
-              ),
-              const SizedBox(width: AppTheme.spacingMedium),
-              Expanded(
-                child: _buildStatCard(
-                  icon: Icons.check_circle,
-                  label: 'Activos',
-                  value: '${_products.where((p) => p.isActive).length}',
-                  color: AppTheme.successColor,
-                ),
-              ),
-              const SizedBox(width: AppTheme.spacingMedium),
-              Expanded(
-                child: _buildStatCard(
-                  icon: Icons.cancel,
-                  label: 'Inactivos',
-                  value: '${_products.where((p) => !p.isActive).length}',
-                  color: AppTheme.errorColor,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: AppTheme.spacingLarge),
+  Widget _buildWorkShiftBanner(WorkShiftState workShiftState, String pointOfSaleName) {
+    final hasActiveShift = workShiftState.hasActiveShift && workShiftState.activeWorkShift != null;
 
-          // Barra de búsqueda
-          TextField(
-            controller: _searchController,
-            style: const TextStyle(
-              fontSize: 15,
-              color: AppTheme.textPrimary,
-            ),
-            cursorColor: AppTheme.primaryColor,
-            decoration: InputDecoration(
-              hintText: 'Buscar productos por nombre o código...',
-              hintStyle: const TextStyle(color: AppTheme.textDisabled),
-              prefixIcon: const Icon(Icons.search,
-                  color: AppTheme.primaryColor, size: 20),
-              suffixIcon: _searchController.text.isNotEmpty
-                  ? IconButton(
-                      icon: const Icon(Icons.clear,
-                          color: AppTheme.textSecondary, size: 20),
-                      onPressed: () {
-                        _searchController.clear();
-                        _loadProducts();
-                      },
-                    )
-                  : null,
-              filled: true,
-              fillColor: AppTheme.surfaceColor,
-              contentPadding: const EdgeInsets.symmetric(
-                horizontal: AppTheme.spacingMedium,
-                vertical: AppTheme.spacingMedium,
-              ),
-              border: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                borderSide:
-                    const BorderSide(color: AppTheme.borderColor, width: 1),
-              ),
-              enabledBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                borderSide:
-                    const BorderSide(color: AppTheme.borderColor, width: 1),
-              ),
-              focusedBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                borderSide:
-                    const BorderSide(color: AppTheme.primaryColor, width: 2),
-              ),
-              errorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                borderSide:
-                    const BorderSide(color: AppTheme.errorColor, width: 1),
-              ),
-              focusedErrorBorder: OutlineInputBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                borderSide:
-                    const BorderSide(color: AppTheme.errorColor, width: 2),
-              ),
-            ),
-            onChanged: _searchProductsHandler,
-          ),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildStatCard({
-    required IconData icon,
-    required String label,
-    required String value,
-    required Color color,
-  }) {
     return Container(
+      margin: const EdgeInsets.symmetric(
+        horizontal: AppTheme.spacingMedium,
+        vertical: AppTheme.spacingSmall,
+      ),
       padding: const EdgeInsets.symmetric(
         horizontal: AppTheme.spacingMedium,
-        vertical: AppTheme.spacingMedium,
+        vertical: AppTheme.spacingSmall,
       ),
       decoration: BoxDecoration(
         color: AppTheme.surfaceColor,
@@ -500,295 +377,139 @@ class _HomePageState extends State<HomePage> {
       ),
       child: Row(
         children: [
+          // Status indicator
           Container(
             width: 8,
             height: 8,
-            decoration: const BoxDecoration(
-              color: AppTheme.primaryColor,
+            decoration: BoxDecoration(
+              color: hasActiveShift ? AppTheme.successColor : AppTheme.errorColor,
               shape: BoxShape.circle,
             ),
           ),
           const SizedBox(width: AppTheme.spacingSmall),
+          
+          // Text
           Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  value,
-                  style: const TextStyle(
-                    fontSize: 20,
-                    fontWeight: FontWeight.w600,
-                    color: AppTheme.textPrimary,
-                  ),
-                ),
-                Text(
-                  label,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    color: AppTheme.textSecondary,
-                  ),
-                ),
-              ],
+            child: Text(
+              hasActiveShift ? 'Turno abierto' : 'Sin turno activo',
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppTheme.textPrimary,
+              ),
             ),
+          ),
+          
+          // Icon
+          Icon(
+            Icons.access_time,
+            size: 16,
+            color: AppTheme.textSecondary,
           ),
         ],
       ),
     );
   }
 
-  Widget _buildProductsGrid() {
-    if (_isLoading) {
-      return const Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            CircularProgressIndicator(
-              color: AppTheme.primaryColor,
-            ),
-            SizedBox(height: AppTheme.spacingMedium),
-            Text(
-              'Cargando productos...',
-              style: TextStyle(color: AppTheme.textSecondary),
-            ),
-          ],
-        ),
-      );
-    }
-
-    if (_products.isEmpty) {
-      return Center(
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            Container(
-              width: 120,
-              height: 120,
-              decoration: BoxDecoration(
-                color: AppTheme.backgroundColor,
-                shape: BoxShape.circle,
-              ),
-              child: const Icon(
-                Icons.inventory_2_outlined,
-                size: 64,
-                color: AppTheme.textDisabled,
-              ),
-            ),
-            const SizedBox(height: AppTheme.spacingLarge),
-            const Text(
-              'No hay productos disponibles',
-              style: TextStyle(
-                fontSize: 18,
-                fontWeight: FontWeight.w600,
-                color: AppTheme.textPrimary,
-              ),
-            ),
-            const SizedBox(height: AppTheme.spacingSmall),
-            const Text(
-              'Sincronice desde la API para cargar productos',
-              style: TextStyle(
-                fontSize: 14,
-                color: AppTheme.textSecondary,
-              ),
-            ),
-            const SizedBox(height: AppTheme.spacingXLarge),
-            CustomButton(
-              text: 'Sincronizar desde API',
-              onPressed: _syncProductsFromApi,
-              icon: Icons.cloud_download,
-            ),
-          ],
-        ),
-      );
-    }
-
+  Widget _buildModulesGrid() {
     return LayoutBuilder(
       builder: (context, constraints) {
         // Determinar el número de columnas según el ancho
         int crossAxisCount;
-        if (constraints.maxWidth > 1200) {
+        if (constraints.maxWidth > 1000) {
           crossAxisCount = 4;
-        } else if (constraints.maxWidth > 800) {
-          crossAxisCount = 3;
         } else if (constraints.maxWidth > 600) {
           crossAxisCount = 2;
         } else {
           crossAxisCount = 1;
         }
 
-        return GridView.builder(
-          padding: const EdgeInsets.all(AppTheme.spacingLarge),
-          gridDelegate: SliverGridDelegateWithFixedCrossAxisCount(
-            crossAxisCount: crossAxisCount,
-            crossAxisSpacing: AppTheme.spacingMedium,
-            mainAxisSpacing: AppTheme.spacingMedium,
-            childAspectRatio: 0.75, // Ajustar según necesidad
-          ),
-          itemCount: _products.length,
-          itemBuilder: (context, index) {
-            final product = _products[index];
-            return ProductCard(
-              product: product,
+        return GridView.count(
+          crossAxisCount: crossAxisCount,
+          padding: const EdgeInsets.all(AppTheme.spacingXLarge),
+          mainAxisSpacing: AppTheme.spacingMedium,
+          crossAxisSpacing: AppTheme.spacingMedium,
+          childAspectRatio: 1.5,
+          children: [
+            _buildModuleCard(
+              title: 'Pedidos',
+              description: 'Gestiona los pedidos de las mesas',
+              icon: Icons.receipt_long_outlined,
+              onTap: _navigateToOrders,
+            ),
+            _buildModuleCard(
+              title: 'Turno',
+              description: 'Controla el inicio y cierre de turno',
+              icon: Icons.access_time_outlined,
               onTap: () {
-                _showProductDetails(product);
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const WorkShiftPage(),
+                  ),
+                );
               },
-            );
-          },
+            ),
+            _buildModuleCard(
+              title: 'Domicilios',
+              description: 'Administra los pedidos a domicilio',
+              icon: Icons.delivery_dining_outlined,
+              onTap: () => _showModuleInProgress('Domicilios'),
+            ),
+            _buildModuleCard(
+              title: 'Inventario',
+              description: 'Consulta y actualiza el inventario',
+              icon: Icons.inventory_2_outlined,
+              onTap: () => _showModuleInProgress('Inventario'),
+            ),
+          ],
         );
       },
     );
   }
 
-  void _showProductDetails(Product product) {
-    showModalBottomSheet(
-      context: context,
-      backgroundColor: AppTheme.surfaceColor,
-      shape: const RoundedRectangleBorder(
-        borderRadius: BorderRadius.vertical(
-          top: Radius.circular(AppTheme.radiusMedium),
+  Widget _buildModuleCard({
+    required String title,
+    required String description,
+    required IconData icon,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+      child: Container(
+        padding: const EdgeInsets.all(AppTheme.spacingLarge),
+        decoration: BoxDecoration(
+          color: AppTheme.surfaceColor,
+          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+          border: Border.all(color: AppTheme.borderColor, width: 1),
         ),
-      ),
-      builder: (context) => Container(
-        padding: const EdgeInsets.all(AppTheme.spacingXLarge),
-        color: AppTheme.surfaceColor,
         child: Column(
-          mainAxisSize: MainAxisSize.min,
           crossAxisAlignment: CrossAxisAlignment.start,
+          mainAxisAlignment: MainAxisAlignment.center,
           children: [
-            // Header
-            Row(
-              children: [
-                Container(
-                  width: 60,
-                  height: 60,
-                  decoration: BoxDecoration(
-                    color: AppTheme.backgroundColor,
-                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                    border: Border.all(color: AppTheme.borderColor, width: 1.5),
-                  ),
-                  child: const Icon(
-                    Icons.restaurant_menu,
-                    color: AppTheme.primaryColor,
-                    size: 28,
-                  ),
-                ),
-                const SizedBox(width: AppTheme.spacingMedium),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        product.name,
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.textPrimary,
-                        ),
-                      ),
-                      const SizedBox(height: 4),
-                      Text(
-                        '\$${product.salePrice.toStringAsFixed(2)}',
-                        style: const TextStyle(
-                          fontSize: 18,
-                          fontWeight: FontWeight.bold,
-                          color: AppTheme.primaryColor,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Container(
-                  padding: const EdgeInsets.symmetric(
-                    horizontal: AppTheme.spacingMedium,
-                    vertical: AppTheme.spacingSmall,
-                  ),
-                  decoration: BoxDecoration(
-                    border: Border.all(
-                      color: product.isActive
-                          ? AppTheme.successColor
-                          : AppTheme.textDisabled,
-                    ),
-                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                  ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      Container(
-                        width: 6,
-                        height: 6,
-                        decoration: BoxDecoration(
-                          color: product.isActive
-                              ? AppTheme.successColor
-                              : AppTheme.textDisabled,
-                          shape: BoxShape.circle,
-                        ),
-                      ),
-                      const SizedBox(width: 6),
-                      Text(
-                        product.isActive ? 'Activo' : 'Inactivo',
-                        style: TextStyle(
-                          fontSize: 11,
-                          fontWeight: FontWeight.w500,
-                          color: product.isActive
-                              ? AppTheme.successColor
-                              : AppTheme.textDisabled,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
+            Icon(
+              icon,
+              size: 32,
+              color: AppTheme.textSecondary,
             ),
-            const SizedBox(height: AppTheme.spacingLarge),
-
-            // Description
-            if (product.description != null &&
-                product.description!.isNotEmpty) ...[
-              const Text(
-                'Descripción',
-                style: TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                  color: AppTheme.textSecondary,
-                ),
+            const SizedBox(height: AppTheme.spacingMedium),
+            Text(
+              title,
+              style: const TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w600,
+                color: AppTheme.textPrimary,
               ),
-              const SizedBox(height: AppTheme.spacingSmall),
-              Text(
-                product.description!,
-                style: const TextStyle(
-                  fontSize: 16,
-                  color: AppTheme.textPrimary,
-                  height: 1.5,
-                ),
+            ),
+            const SizedBox(height: AppTheme.spacingXSmall),
+            Text(
+              description,
+              style: const TextStyle(
+                fontSize: 13,
+                color: AppTheme.textSecondary,
+                height: 1.4,
               ),
-              const SizedBox(height: AppTheme.spacingLarge),
-            ],
-
-            // Additional Info
-            if (product.formulaCode != null) ...[
-              Row(
-                children: [
-                  const Icon(Icons.qr_code,
-                      color: AppTheme.textSecondary, size: 20),
-                  const SizedBox(width: AppTheme.spacingSmall),
-                  const Text(
-                    'Código: ',
-                    style: TextStyle(
-                      fontSize: 14,
-                      fontWeight: FontWeight.w600,
-                      color: AppTheme.textSecondary,
-                    ),
-                  ),
-                  Text(
-                    product.formulaCode!,
-                    style: const TextStyle(
-                      fontSize: 14,
-                      color: AppTheme.textPrimary,
-                      fontFamily: 'monospace',
-                    ),
-                  ),
-                ],
-              ),
-            ],
+            ),
           ],
         ),
       ),

@@ -1,5 +1,6 @@
 import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
 import 'core/injection/injection_container.dart';
 import 'presentation/pages/auth/login_page.dart';
@@ -19,14 +20,18 @@ void main() async {
   // Initialize dependency injection
   await InjectionContainer().init();
 
-  runApp(const MyApp());
+  runApp(
+    const ProviderScope(
+      child: MyApp(),
+    ),
+  );
 }
 
-class MyApp extends StatelessWidget {
+class MyApp extends ConsumerWidget {
   const MyApp({super.key});
 
   @override
-  Widget build(BuildContext context) {
+  Widget build(BuildContext context, WidgetRef ref) {
     return MaterialApp(
       title: 'Restobar POS',
       debugShowCheckedModeBanner: false,
@@ -34,24 +39,59 @@ class MyApp extends StatelessWidget {
         colorScheme: ColorScheme.fromSeed(seedColor: Colors.deepOrange),
         useMaterial3: true,
       ),
+      navigatorKey: _navigatorKey,
+      scaffoldMessengerKey: _scaffoldMessengerKey,
       home: const AuthCheck(),
     );
   }
 }
 
+// Global navigator key para poder navegar desde cualquier lugar
+final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
+
+// Global scaffold messenger key para mostrar mensajes desde cualquier lugar
+final GlobalKey<ScaffoldMessengerState> _scaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+
+/// Navegar al login desde cualquier parte de la app
+void navigateToLogin() {
+  _navigatorKey.currentState?.pushAndRemoveUntil(
+    MaterialPageRoute(builder: (context) => const LoginPage()),
+    (route) => false,
+  );
+}
+
 /// Widget to check authentication and point of sale status on app start
-class AuthCheck extends StatefulWidget {
+class AuthCheck extends ConsumerStatefulWidget {
   const AuthCheck({super.key});
 
   @override
-  State<AuthCheck> createState() => _AuthCheckState();
+  ConsumerState<AuthCheck> createState() => _AuthCheckState();
 }
 
-class _AuthCheckState extends State<AuthCheck> {
+class _AuthCheckState extends ConsumerState<AuthCheck> {
   @override
   void initState() {
     super.initState();
-    _checkAndNavigate();
+    // Registrar callback para cuando la sesión expire
+    _registerSessionExpiredCallback();
+    
+    // Defer navigation until after the first frame is rendered
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _checkAndNavigate();
+    });
+  }
+
+  void _registerSessionExpiredCallback() {
+    final sessionManager = InjectionContainer().sessionManager;
+    
+    // Registrar callback de navegación
+    sessionManager.registerSessionExpiredCallback(() {
+      // Navegar al login cuando la sesión expire
+      navigateToLogin();
+    });
+    
+    // Registrar scaffold messenger key para mensajes globales
+    sessionManager.registerScaffoldMessengerKey(_scaffoldMessengerKey);
   }
 
   Future<void> _checkAndNavigate() async {
@@ -70,8 +110,21 @@ class _AuthCheckState extends State<AuthCheck> {
       return;
     }
 
+    // Verificar si el token ha expirado
+    final user = await container.getCurrentUser.call();
+    if (user != null && user.isTokenExpired) {
+      // Token expirado, cerrar sesión y ir al login
+      await container.sessionManager.handleSessionExpired();
+      if (mounted) {
+        Navigator.of(context).pushReplacement(
+          MaterialPageRoute(builder: (context) => const LoginPage()),
+        );
+      }
+      return;
+    }
+
     // Check if point of sale is selected
-    final selectedPos = await container.getSelectedPointOfSale();
+    final selectedPos = await container.getSelectedPointOfSale.call();
 
     if (mounted) {
       if (selectedPos == null) {

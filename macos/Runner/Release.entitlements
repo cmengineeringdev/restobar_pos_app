@@ -2,7 +2,16 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<!-- App Sandbox (obligatorio para Mac App Store) -->
 	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	
+	<!-- CRÍTICO: Acceso de red para peticiones HTTP a la API -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	
+	<!-- JIT para mejor rendimiento de Flutter/Dart -->
+	<key>com.apple.security.cs.allow-jit</key>
 	<true/>
 </dict>
 </plist>
