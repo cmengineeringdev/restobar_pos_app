@@ -20,8 +20,8 @@ abstract class ProductRepository {
   Future<int> deleteProduct(int id);
 
   /// Fetch products from remote API
-  Future<List<Product>> fetchProductsFromApi();
+  Future<List<Product>> fetchProductsFromApi({required int pointOfSaleId});
 
   /// Sync products: fetch from API and save to local database
-  Future<List<Product>> syncProducts();
+  Future<List<Product>> syncProducts({required int pointOfSaleId});
 }

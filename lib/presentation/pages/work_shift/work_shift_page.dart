@@ -4,6 +4,8 @@ import '../../../core/constants/app_theme.dart';
 import '../../../core/providers/auth_state_notifier.dart';
 import '../../../core/providers/point_of_sale_state_notifier.dart';
 import '../../../core/providers/work_shift_state_notifier.dart';
+import '../../../core/providers/providers.dart';
+import '../../../core/utils/currency_formatter.dart';
 import 'package:intl/intl.dart';
 
 class WorkShiftPage extends ConsumerStatefulWidget {
@@ -15,6 +17,7 @@ class WorkShiftPage extends ConsumerStatefulWidget {
 
 class _WorkShiftPageState extends ConsumerState<WorkShiftPage> {
   bool _isCheckingRemote = false;
+  Map<String, dynamic>? _salesSummary;
 
   @override
   void initState() {
@@ -38,7 +41,7 @@ class _WorkShiftPageState extends ConsumerState<WorkShiftPage> {
 
   Future<void> _checkActiveWorkShift() async {
     final pointOfSaleState = ref.read(pointOfSaleStateProvider);
-    
+
     if (pointOfSaleState.selectedPointOfSale == null) {
       _showErrorSnackBar('No hay punto de venta seleccionado');
       return;
@@ -53,6 +56,12 @@ class _WorkShiftPageState extends ConsumerState<WorkShiftPage> {
       await ref.read(workShiftStateProvider.notifier).checkActiveWorkShiftRemote(
             pointOfSaleState.selectedPointOfSale!.id,
           );
+
+      // Si hay turno activo, cargar el resumen de ventas
+      final workShiftState = ref.read(workShiftStateProvider);
+      if (workShiftState.hasActiveShift && workShiftState.activeWorkShift != null) {
+        await _loadSalesSummary(workShiftState.activeWorkShift!.localId!);
+      }
     } catch (e) {
       if (mounted) {
         _showErrorSnackBar('Error al verificar turno activo: ${e.toString().replaceAll('Exception: ', '')}');
@@ -63,6 +72,23 @@ class _WorkShiftPageState extends ConsumerState<WorkShiftPage> {
           _isCheckingRemote = false;
         });
       }
+    }
+  }
+
+  Future<void> _loadSalesSummary(int workShiftId) async {
+    try {
+      final orderRepository = ref.read(orderRepositoryProvider);
+
+      // Obtener el resumen de ventas desde el repositorio
+      final summary = await orderRepository.getWorkShiftSalesSummary(workShiftId);
+
+      if (mounted) {
+        setState(() {
+          _salesSummary = summary;
+        });
+      }
+    } catch (e) {
+      print('ERROR: Error al cargar resumen de ventas: $e');
     }
   }
 
@@ -166,7 +192,7 @@ class _WorkShiftPageState extends ConsumerState<WorkShiftPage> {
   }
 
   String _formatDateTime(DateTime dateTime) {
-    return DateFormat('dd/MM/yyyy HH:mm').format(dateTime);
+    return DateFormat('d MMM yyyy, hh:mm a', 'es_ES').format(dateTime);
   }
 
   @override
@@ -179,6 +205,7 @@ class _WorkShiftPageState extends ConsumerState<WorkShiftPage> {
       backgroundColor: AppTheme.backgroundColor,
       appBar: AppBar(
         backgroundColor: AppTheme.surfaceColor,
+        surfaceTintColor: Colors.transparent,
         elevation: 0,
         bottom: PreferredSize(
           preferredSize: const Size.fromHeight(1),
@@ -203,36 +230,62 @@ class _WorkShiftPageState extends ConsumerState<WorkShiftPage> {
                 valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
               ),
             )
-          : SingleChildScrollView(
-              padding: const EdgeInsets.all(AppTheme.spacingLarge),
-              child: Column(
-                crossAxisAlignment: CrossAxisAlignment.stretch,
-                children: [
-                  // Información del punto de venta
-                  _buildInfoCard(
-                    title: 'Punto de Venta',
-                    icon: Icons.store,
-                    content: pointOfSaleState.selectedPointOfSale?.name ??
-                        'No seleccionado',
-                  ),
-                  const SizedBox(height: AppTheme.spacingMedium),
+          : Row(
+              children: [
+                // Columna izquierda: Información del turno
+                Expanded(
+                  flex: 1,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(AppTheme.spacingLarge),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.stretch,
+                      children: [
+                        // Información del punto de venta
+                        _buildInfoCard(
+                          title: 'Punto de Venta',
+                          icon: Icons.store,
+                          content: pointOfSaleState.selectedPointOfSale?.name ??
+                              'No seleccionado',
+                        ),
+                        const SizedBox(height: AppTheme.spacingMedium),
 
-                  // Información del usuario
-                  _buildInfoCard(
-                    title: 'Usuario',
-                    icon: Icons.person,
-                    content: authState.user?.fullName ?? 'No disponible',
-                  ),
-                  const SizedBox(height: AppTheme.spacingLarge),
+                        // Información del usuario
+                        _buildInfoCard(
+                          title: 'Usuario',
+                          icon: Icons.person,
+                          content: authState.user?.fullName ?? 'No disponible',
+                        ),
+                        const SizedBox(height: AppTheme.spacingLarge),
 
-                  // Estado del turno
-                  if (workShiftState.hasActiveShift &&
-                      workShiftState.activeWorkShift != null)
-                    _buildActiveWorkShiftCard(workShiftState.activeWorkShift!)
-                  else
-                    _buildNoActiveWorkShiftCard(),
-                ],
-              ),
+                        // Estado del turno
+                        if (workShiftState.hasActiveShift &&
+                            workShiftState.activeWorkShift != null)
+                          _buildActiveWorkShiftCard(workShiftState.activeWorkShift!)
+                        else
+                          _buildNoActiveWorkShiftCard(),
+                      ],
+                    ),
+                  ),
+                ),
+
+                // Divisor vertical
+                Container(
+                  width: 1,
+                  color: AppTheme.borderColor,
+                ),
+
+                // Columna derecha: Resumen de ventas
+                Expanded(
+                  flex: 1,
+                  child: SingleChildScrollView(
+                    padding: const EdgeInsets.all(AppTheme.spacingLarge),
+                    child: workShiftState.hasActiveShift &&
+                            workShiftState.activeWorkShift != null
+                        ? _buildSalesSummary(workShiftState.activeWorkShift!)
+                        : _buildNoSalesMessage(),
+                  ),
+                ),
+              ],
             ),
     );
   }
@@ -552,6 +605,349 @@ class _WorkShiftPageState extends ConsumerState<WorkShiftPage> {
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildSalesSummary(workShift) {
+    if (_salesSummary == null) {
+      return const Center(
+        child: CircularProgressIndicator(
+          valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
+        ),
+      );
+    }
+
+    final orders = _salesSummary!['orders'] as Map<String, dynamic>;
+    final payments = _salesSummary!['payments'] as List<Map<String, dynamic>>;
+
+    final completedOrders = orders['completed_orders'] as int;
+    final activeOrders = orders['active_orders'] as int;
+    final cancelledOrders = orders['cancelled_orders'] as int;
+    final totalOrders = orders['total_orders'] as int;
+    final totalSales = (orders['total_sales'] as num).toDouble();
+    final totalSubtotal = (orders['total_subtotal'] as num).toDouble();
+    final totalTax = (orders['total_tax'] as num).toDouble();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        // Título
+        Row(
+          children: [
+            const Icon(Icons.analytics, color: AppTheme.primaryColor, size: 24),
+            const SizedBox(width: AppTheme.spacingSmall),
+            const Text(
+              'Resumen de Ventas',
+              style: TextStyle(
+                color: AppTheme.textPrimary,
+                fontSize: 18,
+                fontWeight: FontWeight.bold,
+              ),
+            ),
+            const Spacer(),
+            IconButton(
+              icon: const Icon(Icons.refresh, size: 20),
+              color: AppTheme.primaryColor,
+              onPressed: () => _loadSalesSummary(workShift.localId!),
+              tooltip: 'Actualizar',
+            ),
+          ],
+        ),
+        const SizedBox(height: AppTheme.spacingLarge),
+
+        // Total de ventas
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(AppTheme.spacingLarge),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceColor,
+            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+            border: Border.all(color: AppTheme.borderColor, width: 1),
+          ),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text(
+                'Total Ventas',
+                style: TextStyle(
+                  color: AppTheme.textSecondary,
+                  fontSize: 14,
+                  fontWeight: FontWeight.w500,
+                ),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                CurrencyFormatter.format(totalSales),
+                style: const TextStyle(
+                  color: AppTheme.primaryColor,
+                  fontSize: 32,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppTheme.spacingLarge),
+
+        // Órdenes
+        _buildSectionTitle('Órdenes'),
+        const SizedBox(height: AppTheme.spacingSmall),
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                'Completadas',
+                completedOrders.toString(),
+                Icons.check_circle_outline,
+                AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(width: AppTheme.spacingSmall),
+            Expanded(
+              child: _buildStatCard(
+                'Activas',
+                activeOrders.toString(),
+                Icons.pending_outlined,
+                AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppTheme.spacingSmall),
+        Row(
+          children: [
+            Expanded(
+              child: _buildStatCard(
+                'Canceladas',
+                cancelledOrders.toString(),
+                Icons.cancel_outlined,
+                AppTheme.textSecondary,
+              ),
+            ),
+            const SizedBox(width: AppTheme.spacingSmall),
+            Expanded(
+              child: _buildStatCard(
+                'Total',
+                totalOrders.toString(),
+                Icons.receipt_long_outlined,
+                AppTheme.textSecondary,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: AppTheme.spacingLarge),
+
+        // Desglose
+        _buildSectionTitle('Desglose'),
+        const SizedBox(height: AppTheme.spacingSmall),
+        Container(
+          padding: const EdgeInsets.all(AppTheme.spacingMedium),
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceColor,
+            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+            border: Border.all(color: AppTheme.borderColor),
+          ),
+          child: Column(
+            children: [
+              _buildDetailRow('Subtotal', CurrencyFormatter.format(totalSubtotal)),
+              const SizedBox(height: 8),
+              _buildDetailRow('Imp. Consumo', CurrencyFormatter.format(totalTax)),
+              const Divider(height: 20, color: AppTheme.borderColor),
+              _buildDetailRow(
+                'Total',
+                CurrencyFormatter.format(totalSales),
+                isBold: true,
+              ),
+            ],
+          ),
+        ),
+        const SizedBox(height: AppTheme.spacingLarge),
+
+        // Métodos de pago
+        if (payments.isNotEmpty) ...[
+          _buildSectionTitle('Métodos de Pago'),
+          const SizedBox(height: AppTheme.spacingSmall),
+          ...payments.map((payment) {
+            final method = payment['payment_method'] as String;
+            final count = payment['count'] as int;
+            final total = (payment['total'] as num).toDouble();
+
+            String methodName;
+            IconData methodIcon;
+
+            switch (method) {
+              case 'cash':
+                methodName = 'Efectivo';
+                methodIcon = Icons.money;
+                break;
+              case 'credit_card':
+                methodName = 'Tarjeta de Crédito';
+                methodIcon = Icons.credit_card;
+                break;
+              case 'debit_card':
+                methodName = 'Tarjeta de Débito';
+                methodIcon = Icons.payment;
+                break;
+              default:
+                methodName = method;
+                methodIcon = Icons.payment;
+            }
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: AppTheme.spacingSmall),
+              padding: const EdgeInsets.all(AppTheme.spacingMedium),
+              decoration: BoxDecoration(
+                color: AppTheme.surfaceColor,
+                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                border: Border.all(color: AppTheme.borderColor),
+              ),
+              child: Row(
+                children: [
+                  Icon(methodIcon, color: AppTheme.textSecondary, size: 24),
+                  const SizedBox(width: AppTheme.spacingSmall),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          methodName,
+                          style: const TextStyle(
+                            color: AppTheme.textPrimary,
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                          ),
+                        ),
+                        Text(
+                          '$count transacciones',
+                          style: const TextStyle(
+                            color: AppTheme.textSecondary,
+                            fontSize: 12,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  Text(
+                    CurrencyFormatter.format(total),
+                    style: const TextStyle(
+                      color: AppTheme.textPrimary,
+                      fontSize: 16,
+                      fontWeight: FontWeight.bold,
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }),
+        ],
+      ],
+    );
+  }
+
+  Widget _buildNoSalesMessage() {
+    return Center(
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(
+            Icons.analytics_outlined,
+            size: 64,
+            color: AppTheme.textDisabled,
+          ),
+          const SizedBox(height: AppTheme.spacingMedium),
+          const Text(
+            'No hay turno activo',
+            style: TextStyle(
+              color: AppTheme.textPrimary,
+              fontSize: 16,
+              fontWeight: FontWeight.w600,
+            ),
+          ),
+          const SizedBox(height: AppTheme.spacingSmall),
+          const Text(
+            'Inicie un turno para ver el resumen de ventas',
+            style: TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 13,
+            ),
+            textAlign: TextAlign.center,
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildSectionTitle(String title) {
+    return Text(
+      title,
+      style: const TextStyle(
+        color: AppTheme.textPrimary,
+        fontSize: 16,
+        fontWeight: FontWeight.bold,
+      ),
+    );
+  }
+
+  Widget _buildStatCard(String label, String value, IconData icon, Color color) {
+    return Container(
+      padding: const EdgeInsets.all(AppTheme.spacingMedium),
+      decoration: BoxDecoration(
+        color: AppTheme.surfaceColor,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        border: Border.all(color: AppTheme.borderColor),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Icon(icon, color: AppTheme.textSecondary, size: 20),
+              Text(
+                value,
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 24,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+          Text(
+            label,
+            style: const TextStyle(
+              color: AppTheme.textSecondary,
+              fontSize: 12,
+              fontWeight: FontWeight.w500,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailRow(String label, String value, {bool isBold = false}) {
+    return Row(
+      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      children: [
+        Text(
+          label,
+          style: TextStyle(
+            color: AppTheme.textSecondary,
+            fontSize: 14,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.normal,
+          ),
+        ),
+        Text(
+          value,
+          style: TextStyle(
+            color: isBold ? AppTheme.primaryColor : AppTheme.textPrimary,
+            fontSize: 14,
+            fontWeight: isBold ? FontWeight.bold : FontWeight.w600,
+          ),
+        ),
+      ],
     );
   }
 }

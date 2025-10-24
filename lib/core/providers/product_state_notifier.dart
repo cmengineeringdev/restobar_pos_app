@@ -92,11 +92,11 @@ class ProductStateNotifier extends StateNotifier<ProductState> {
   }
 
   /// Sincronizar productos desde la API
-  Future<void> syncProducts() async {
+  Future<void> syncProducts({required int pointOfSaleId}) async {
     state = state.copyWith(isSyncing: true, clearError: true, clearSuccess: true);
 
     try {
-      final products = await _syncProducts();
+      final products = await _syncProducts(pointOfSaleId: pointOfSaleId);
       state = state.copyWith(
         products: products,
         isSyncing: false,

@@ -244,3 +244,6 @@ El sistema implementado proporciona una capa robusta de seguridad y validación 
 
 La implementación sigue las mejores prácticas de Flutter y Dart, con código limpio, bien documentado y fácil de extender.
 
+
+
+

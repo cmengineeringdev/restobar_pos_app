@@ -105,18 +105,32 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
       // Verificar si el pedido ya está confirmado (preparing, ready, etc.)
       if (order != null && (order.status == 'preparing' || order.status == 'ready' || order.status == 'delivered')) {
         print('DEBUG ORDER: Orden existente confirmada encontrada: ${order.id} - status: ${order.status}');
+        print('DEBUG ORDER: Totales en DB - Subtotal: ${order.subtotal}, Tax: ${order.tax}, Total: ${order.total}');
         
         // Cargar los items de la orden desde DB
         final items = await _getOrderItems(order.id!);
         print('DEBUG ORDER: ${items.length} items cargados desde DB');
 
-        // Calcular totales
+        // Calcular totales desde los items
         final subtotal = _calculateSubtotal(items);
         final tax = _calculateTax(subtotal);
         final total = subtotal + tax;
+        
+        print('DEBUG ORDER: Totales calculados - Subtotal: $subtotal, Tax: $tax, Total: $total');
+
+        // Si los totales en DB están desactualizados, actualizarlos
+        if (order.total != total) {
+          print('DEBUG ORDER: Actualizando totales desactualizados en DB');
+          await _updateOrderTotals(
+            orderId: order.id!,
+            subtotal: subtotal,
+            tax: tax,
+            total: total,
+          );
+        }
 
         _safeSetState(state.copyWith(
-          currentOrder: order,
+          currentOrder: order.copyWith(subtotal: subtotal, tax: tax, total: total),
           items: items,
           temporaryItems: [],
           subtotal: subtotal,
@@ -326,18 +340,22 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
 
       // 6. Obtener la orden actualizada desde DB
       final confirmedOrder = await _orderRepository.getOrderByTable(tableId);
+      print('DEBUG ORDER: Orden recuperada desde DB - Subtotal: ${confirmedOrder?.subtotal}, Tax: ${confirmedOrder?.tax}, Total: ${confirmedOrder?.total}');
 
-      // 7. Actualizar estado local
+      // 7. Actualizar estado local con los totales de la orden confirmada
       state = state.copyWith(
         currentOrder: confirmedOrder,
         items: savedItems,
         temporaryItems: [], // Limpiar items temporales
+        subtotal: confirmedOrder?.subtotal ?? state.subtotal,
+        tax: confirmedOrder?.tax ?? state.tax,
+        total: confirmedOrder?.total ?? state.total,
         isConfirmed: true,
         isLoading: false,
         clearError: true,
       );
 
-      print('DEBUG ORDER: Pedido confirmado exitosamente');
+      print('DEBUG ORDER: Pedido confirmado exitosamente - Estado Total: ${state.total}');
     } catch (e) {
       print('DEBUG ORDER: Error al confirmar pedido: $e');
       state = state.copyWith(
@@ -353,7 +371,7 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
     return items.fold(0, (sum, item) => sum + item.subtotal);
   }
 
-  /// Calcular impuesto (19% en este ejemplo)
+  /// Calcular impuesto de consumo (19%)
   double _calculateTax(double subtotal) {
     return subtotal * 0.19;
   }

@@ -13,6 +13,7 @@ import '../../domain/usecases/add_order_item.dart';
 import '../../domain/usecases/cancel_order.dart';
 import '../../domain/usecases/clear_point_of_sale.dart';
 import '../../domain/usecases/close_work_shift.dart';
+import '../../domain/usecases/complete_order.dart';
 import '../../domain/usecases/create_order.dart';
 import '../../domain/usecases/create_payment.dart';
 import '../../domain/usecases/create_tables_for_point_of_sale.dart';
@@ -202,6 +203,15 @@ final cancelOrderProvider = Provider<CancelOrder>((ref) {
   final orderRepository = ref.watch(orderRepositoryProvider);
   final tableRepository = ref.watch(tableRepositoryProvider);
   return CancelOrder(
+    orderRepository: orderRepository,
+    tableRepository: tableRepository,
+  );
+});
+
+final completeOrderProvider = Provider<CompleteOrder>((ref) {
+  final orderRepository = ref.watch(orderRepositoryProvider);
+  final tableRepository = ref.watch(tableRepositoryProvider);
+  return CompleteOrder(
     orderRepository: orderRepository,
     tableRepository: tableRepository,
   );

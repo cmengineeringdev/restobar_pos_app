@@ -1,27 +1,30 @@
 import '../../domain/entities/payment.dart';
 
-class PaymentModel {
-  final int? id;
-  final int orderId;
-  final String paymentMethod;
-  final double amount;
-  final String status;
-  final String? notes;
-  final DateTime createdAt;
-  final DateTime? updatedAt;
-
+class PaymentModel extends Payment {
   PaymentModel({
-    this.id,
-    required this.orderId,
-    required this.paymentMethod,
-    required this.amount,
-    required this.status,
-    this.notes,
-    required this.createdAt,
-    this.updatedAt,
+    super.id,
+    required super.orderId,
+    required super.paymentMethod,
+    required super.amount,
+    required super.status,
+    super.notes,
+    required super.createdAt,
+    super.updatedAt,
   });
 
-  /// Convert from Map (Database)
+  factory PaymentModel.fromEntity(Payment payment) {
+    return PaymentModel(
+      id: payment.id,
+      orderId: payment.orderId,
+      paymentMethod: payment.paymentMethod,
+      amount: payment.amount,
+      status: payment.status,
+      notes: payment.notes,
+      createdAt: payment.createdAt,
+      updatedAt: payment.updatedAt,
+    );
+  }
+
   factory PaymentModel.fromMap(Map<String, dynamic> map) {
     return PaymentModel(
       id: map['id'] as int?,
@@ -37,7 +40,6 @@ class PaymentModel {
     );
   }
 
-  /// Convert to Map (Database)
   Map<String, dynamic> toMap() {
     return {
       if (id != null) 'id': id,
@@ -45,13 +47,12 @@ class PaymentModel {
       'payment_method': paymentMethod,
       'amount': amount,
       'status': status,
-      'notes': notes,
+      if (notes != null) 'notes': notes,
       'created_at': createdAt.toIso8601String(),
-      'updated_at': updatedAt?.toIso8601String(),
+      if (updatedAt != null) 'updated_at': updatedAt!.toIso8601String(),
     };
   }
 
-  /// Convert to Entity
   Payment toEntity() {
     return Payment(
       id: id,
@@ -64,19 +65,6 @@ class PaymentModel {
       updatedAt: updatedAt,
     );
   }
-
-  /// Create from Entity
-  factory PaymentModel.fromEntity(Payment payment) {
-    return PaymentModel(
-      id: payment.id,
-      orderId: payment.orderId,
-      paymentMethod: payment.paymentMethod,
-      amount: payment.amount,
-      status: payment.status,
-      notes: payment.notes,
-      createdAt: payment.createdAt,
-      updatedAt: payment.updatedAt,
-    );
-  }
 }
+
 

@@ -6,7 +6,7 @@ class SyncProducts {
 
   SyncProducts({required this.repository});
 
-  Future<List<Product>> call() async {
-    return await repository.syncProducts();
+  Future<List<Product>> call({required int pointOfSaleId}) async {
+    return await repository.syncProducts(pointOfSaleId: pointOfSaleId);
   }
 }

@@ -5,7 +5,7 @@ import '../../models/api_response_model.dart';
 import '../../models/product_model.dart';
 
 abstract class ProductRemoteDataSource {
-  Future<List<ProductModel>> getProductsFromApi();
+  Future<List<ProductModel>> getProductsFromApi({required int pointOfSaleId});
 }
 
 class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
@@ -14,11 +14,15 @@ class ProductRemoteDataSourceImpl implements ProductRemoteDataSource {
   ProductRemoteDataSourceImpl({required this.httpClient});
 
   @override
-  Future<List<ProductModel>> getProductsFromApi() async {
+  Future<List<ProductModel>> getProductsFromApi({required int pointOfSaleId}) async {
     try {
+      final uri = Uri.parse(ApiConstants.productsUrl).replace(
+        queryParameters: {'pointOfSaleId': pointOfSaleId.toString()},
+      );
+
       final response = await httpClient
           .get(
-            Uri.parse(ApiConstants.productsUrl),
+            uri,
             headers: ApiConstants.headers,
           )
           .timeout(ApiConstants.connectionTimeout);

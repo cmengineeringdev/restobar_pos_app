@@ -2,6 +2,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:sqflite_common_ffi/sqflite_ffi.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'core/injection/injection_container.dart';
 import 'presentation/pages/auth/login_page.dart';
 import 'presentation/pages/home/home_page.dart';
@@ -16,6 +17,9 @@ void main() async {
     sqfliteFfiInit();
     databaseFactory = databaseFactoryFfi;
   }
+
+  // Initialize date formatting for Spanish locale
+  await initializeDateFormatting('es_ES', null);
 
   // Initialize dependency injection
   await InjectionContainer().init();

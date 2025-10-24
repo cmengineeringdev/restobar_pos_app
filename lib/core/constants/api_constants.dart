@@ -4,9 +4,11 @@ class ApiConstants {
 
   // Endpoints
   static const String productsEndpoint = '/api/product';
+  static const String ordersEndpoint = '/api/order';
 
   // Full URLs
   static String get productsUrl => '$baseUrl$productsEndpoint';
+  static String get ordersUrl => '$baseUrl$ordersEndpoint';
 
   // Timeouts
   static const Duration connectionTimeout = Duration(seconds: 30);

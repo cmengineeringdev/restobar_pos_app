@@ -49,15 +49,19 @@ class ProductRepositoryImpl implements ProductRepository {
   }
 
   @override
-  Future<List<Product>> fetchProductsFromApi() async {
-    final productModels = await remoteDataSource.getProductsFromApi();
+  Future<List<Product>> fetchProductsFromApi({required int pointOfSaleId}) async {
+    final productModels = await remoteDataSource.getProductsFromApi(
+      pointOfSaleId: pointOfSaleId,
+    );
     return productModels.map((model) => model.toEntity()).toList();
   }
 
   @override
-  Future<List<Product>> syncProducts() async {
+  Future<List<Product>> syncProducts({required int pointOfSaleId}) async {
     // Fetch products from API
-    final productModels = await remoteDataSource.getProductsFromApi();
+    final productModels = await remoteDataSource.getProductsFromApi(
+      pointOfSaleId: pointOfSaleId,
+    );
 
     // Save/Update to local database (using UPSERT strategy)
     // This will insert new products or update existing ones based on remote_id

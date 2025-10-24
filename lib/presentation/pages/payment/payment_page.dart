@@ -2,7 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../../../core/constants/app_theme.dart';
+import '../../../core/providers/order_state_notifier.dart';
 import '../../../core/providers/providers.dart';
+import '../../../core/providers/table_state_notifier.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../domain/entities/order.dart';
 
 class PaymentPage extends ConsumerStatefulWidget {
@@ -25,36 +28,14 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
   @override
   void initState() {
     super.initState();
-    _loadExistingPayments();
     // Por defecto, establecer el monto al total pendiente
-    _amountController.text = widget.order.total.toStringAsFixed(2);
-  }
-
-  Future<void> _loadExistingPayments() async {
-    try {
-      final getTotalPaid = ref.read(getTotalPaidForOrderProvider);
-      final totalPaid = await getTotalPaid(widget.order.id!);
-      
-      if (mounted) {
-        setState(() {
-          _totalPaid = totalPaid;
-          final remaining = widget.order.total - totalPaid;
-          if (remaining > 0) {
-            _amountController.text = remaining.toStringAsFixed(2);
-          }
-        });
-      }
-    } catch (e) {
-      print('Error loading payments: $e');
-    }
+    _amountController.text = widget.order.total.toStringAsFixed(0);
   }
 
   double get _remaining => widget.order.total - _totalPaid;
   bool get _isFullyPaid => _remaining <= 0.01; // Pequeña tolerancia para decimales
 
-  Future<void> _processPayment() async {
-    if (_isProcessing) return;
-
+  void _addPayment() {
     final amount = double.tryParse(_amountController.text);
     if (amount == null || amount <= 0) {
       _showSnackBar('Por favor ingrese un monto válido', isError: true);
@@ -66,103 +47,108 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
       return;
     }
 
+    setState(() {
+      _totalPaid += amount;
+      _payments.add({
+        'method': _selectedPaymentMethod,
+        'amount': amount,
+        'notes': _notesController.text,
+      });
+      _notesController.clear();
+
+      final newRemaining = _remaining;
+      if (newRemaining > 0) {
+        _amountController.text = newRemaining.toStringAsFixed(0);
+      } else {
+        _amountController.clear();
+      }
+    });
+
+    _showSnackBar('Pago agregado', isError: false);
+  }
+
+  void _removePayment(int index) {
+    setState(() {
+      final payment = _payments[index];
+      _totalPaid -= payment['amount'] as double;
+      _payments.removeAt(index);
+
+      if (_payments.isEmpty) {
+        _amountController.text = widget.order.total.toStringAsFixed(0);
+      } else {
+        final newRemaining = _remaining;
+        if (newRemaining > 0) {
+          _amountController.text = newRemaining.toStringAsFixed(0);
+        }
+      }
+    });
+
+    _showSnackBar('Pago eliminado', isError: false);
+  }
+
+  Future<void> _confirmPayments() async {
+    if (_payments.isEmpty) {
+      _showSnackBar('No hay pagos para confirmar', isError: true);
+      return;
+    }
+
+    if (!_isFullyPaid) {
+      _showSnackBar('Debe completar el pago total de la orden', isError: true);
+      return;
+    }
+
     setState(() => _isProcessing = true);
 
     try {
       final createPayment = ref.read(createPaymentProvider);
-      
-      await createPayment(
+
+      // Guardar todos los pagos en la base de datos
+      for (final payment in _payments) {
+        await createPayment(
+          orderId: widget.order.id!,
+          paymentMethod: payment['method'] as String,
+          amount: payment['amount'] as double,
+          notes: (payment['notes'] as String).isEmpty ? null : payment['notes'] as String,
+        );
+      }
+
+      if (!mounted) return;
+
+      // Cerrar orden y liberar mesa
+      final completeOrder = ref.read(completeOrderProvider);
+      await completeOrder(
         orderId: widget.order.id!,
-        paymentMethod: _selectedPaymentMethod,
-        amount: amount,
-        notes: _notesController.text.isEmpty ? null : _notesController.text,
+        tableId: widget.order.tableId,
       );
 
       if (!mounted) return;
 
-      setState(() {
-        _totalPaid += amount;
-        _payments.add({
-          'method': _selectedPaymentMethod,
-          'amount': amount,
-          'notes': _notesController.text,
-        });
-        _notesController.clear();
-        
-        final newRemaining = _remaining;
-        if (newRemaining > 0) {
-          _amountController.text = newRemaining.toStringAsFixed(2);
-        } else {
-          _amountController.clear();
-        }
-      });
+      // Limpiar el estado del pedido
+      ref.read(orderStateProvider.notifier).clearOrder();
 
-      _showSnackBar('Pago registrado exitosamente', isError: false);
+      // Actualizar el estado de la mesa localmente
+      await ref.read(tableStateProvider.notifier).updateTableStatus(
+        widget.order.tableId,
+        'available',
+      );
 
-      // Si está completamente pagado, mostrar diálogo de confirmación
-      if (_isFullyPaid) {
-        _showCompletedDialog();
-      }
+      if (!mounted) return;
+
+      _showSnackBar('Orden completada exitosamente', isError: false);
+
+      // Navegar al inicio (cerrar todas las pantallas hasta la raíz)
+      await Future.delayed(const Duration(milliseconds: 500));
+      if (!mounted) return;
+      Navigator.of(context).popUntil((route) => route.isFirst);
     } catch (e) {
       if (mounted) {
-        _showSnackBar('Error al procesar pago: $e', isError: true);
+        _showSnackBar('Error al confirmar pagos: $e', isError: true);
       }
     } finally {
       if (mounted) {
         setState(() => _isProcessing = false);
       }
     }
-  }
-
-  void _showCompletedDialog() {
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surfaceColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.check_circle, color: AppTheme.successColor, size: 32),
-            SizedBox(width: 12),
-            Text(
-              '¡Pago Completado!',
-              style: TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 20,
-                fontWeight: FontWeight.bold,
-              ),
-            ),
-          ],
-        ),
-        content: const Text(
-          'El pago de la orden se ha completado exitosamente.',
-          style: TextStyle(
-            color: AppTheme.textSecondary,
-            fontSize: 14,
-          ),
-        ),
-        actions: [
-          ElevatedButton(
-            onPressed: () {
-              Navigator.of(context).pop(); // Cerrar diálogo
-              Navigator.of(context).pop(true); // Cerrar pantalla de pago
-            },
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.successColor,
-              foregroundColor: Colors.white,
-              padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-              ),
-            ),
-            child: const Text('Aceptar'),
-          ),
-        ],
-      ),
-    );
   }
 
   void _showSnackBar(String message, {required bool isError}) {
@@ -307,38 +293,64 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                   
                   const SizedBox(height: AppTheme.spacingLarge),
                   
-                  // Botón de procesar pago
-                  if (!_isFullyPaid)
-                    SizedBox(
-                      width: double.infinity,
-                      child: ElevatedButton.icon(
-                        onPressed: _isProcessing ? null : _processPayment,
-                        icon: _isProcessing
-                            ? const SizedBox(
-                                width: 18,
-                                height: 18,
-                                child: CircularProgressIndicator(
-                                  color: Colors.white,
-                                  strokeWidth: 2,
-                                ),
-                              )
-                            : const Icon(Icons.payment, size: 20),
-                        label: Text(_isProcessing ? 'Procesando...' : 'Registrar Pago'),
-                        style: ElevatedButton.styleFrom(
-                          backgroundColor: AppTheme.primaryColor,
-                          foregroundColor: Colors.white,
-                          padding: const EdgeInsets.symmetric(vertical: 16),
-                          shape: RoundedRectangleBorder(
-                            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-                          ),
-                          elevation: 0,
-                          textStyle: const TextStyle(
-                            fontSize: 16,
-                            fontWeight: FontWeight.bold,
+                  // Botones de acción
+                  Row(
+                    children: [
+                      // Botón agregar pago
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: _isProcessing ? null : _addPayment,
+                          icon: const Icon(Icons.add, size: 20),
+                          label: const Text('Agregar Pago'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.surfaceColor,
+                            foregroundColor: AppTheme.primaryColor,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                              side: const BorderSide(color: AppTheme.primaryColor),
+                            ),
+                            elevation: 0,
+                            textStyle: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
                           ),
                         ),
                       ),
-                    ),
+                      const SizedBox(width: AppTheme.spacingSmall),
+                      // Botón confirmar pagos
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: (_isProcessing || _payments.isEmpty || !_isFullyPaid) ? null : _confirmPayments,
+                          icon: _isProcessing
+                              ? const SizedBox(
+                                  width: 18,
+                                  height: 18,
+                                  child: CircularProgressIndicator(
+                                    color: Colors.white,
+                                    strokeWidth: 2,
+                                  ),
+                                )
+                              : const Icon(Icons.check_circle, size: 20),
+                          label: Text(_isProcessing ? 'Procesando...' : 'Confirmar'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 16),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                            ),
+                            elevation: 0,
+                            textStyle: const TextStyle(
+                              fontSize: 14,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
                     
                   // Pagos registrados
                   if (_payments.isNotEmpty) ...[
@@ -346,7 +358,7 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                     const Divider(color: AppTheme.borderColor),
                     const SizedBox(height: AppTheme.spacingMedium),
                     const Text(
-                      'Pagos Registrados',
+                      'Pagos Agregados',
                       style: TextStyle(
                         fontSize: 16,
                         fontWeight: FontWeight.bold,
@@ -354,7 +366,11 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                       ),
                     ),
                     const SizedBox(height: AppTheme.spacingSmall),
-                    ..._payments.map((payment) => _buildPaymentTile(payment)),
+                    ..._payments.asMap().entries.map((entry) {
+                      final index = entry.key;
+                      final payment = entry.value;
+                      return _buildPaymentTile(payment, index);
+                    }),
                   ],
                 ],
               ),
@@ -471,13 +487,13 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                 const SizedBox(height: 8),
                 const Divider(color: AppTheme.borderColor),
                 const SizedBox(height: 12),
-                _buildSummaryRow('Subtotal', '\$${widget.order.subtotal.toStringAsFixed(2)}'),
+                _buildSummaryRow('Subtotal', CurrencyFormatter.format(widget.order.subtotal)),
                 const SizedBox(height: 8),
-                _buildSummaryRow('IVA (19%)', '\$${widget.order.tax.toStringAsFixed(2)}'),
+                _buildSummaryRow('Imp. Consumo', CurrencyFormatter.format(widget.order.tax)),
                 const SizedBox(height: 12),
                 const Divider(color: AppTheme.borderColor, thickness: 2),
                 const SizedBox(height: 12),
-                _buildSummaryRow('Total', '\$${widget.order.total.toStringAsFixed(2)}', isBold: true, isLarge: true),
+                _buildSummaryRow('Total', CurrencyFormatter.format(widget.order.total), isBold: true, isLarge: true),
                 
                 if (_totalPaid > 0) ...[
                   const SizedBox(height: 16),
@@ -485,13 +501,13 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                   const SizedBox(height: 12),
                   _buildSummaryRow(
                     'Pagado', 
-                    '\$${_totalPaid.toStringAsFixed(2)}',
+                    CurrencyFormatter.format(_totalPaid),
                     color: AppTheme.successColor,
                   ),
                   const SizedBox(height: 8),
                   _buildSummaryRow(
                     'Pendiente', 
-                    '\$${_remaining.toStringAsFixed(2)}',
+                    CurrencyFormatter.format(_remaining),
                     color: _isFullyPaid ? AppTheme.successColor : AppTheme.warningColor,
                     isBold: true,
                   ),
@@ -502,30 +518,39 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
         ),
 
         // Status indicator
-        if (_isFullyPaid)
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(16),
-            decoration: BoxDecoration(
-              color: AppTheme.successColor.withOpacity(0.1),
-              border: const Border(top: BorderSide(color: AppTheme.successColor)),
-            ),
-            child: const Row(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Icon(Icons.check_circle, color: AppTheme.successColor, size: 24),
-                SizedBox(width: 8),
-                Text(
-                  'PAGO COMPLETADO',
-                  style: TextStyle(
-                    color: AppTheme.successColor,
-                    fontSize: 14,
-                    fontWeight: FontWeight.bold,
-                  ),
-                ),
-              ],
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: _isFullyPaid
+                ? AppTheme.successColor.withOpacity(0.1)
+                : AppTheme.warningColor.withOpacity(0.1),
+            border: Border(
+              top: BorderSide(
+                color: _isFullyPaid ? AppTheme.successColor : AppTheme.warningColor,
+              ),
             ),
           ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              Icon(
+                _isFullyPaid ? Icons.check_circle : Icons.pending,
+                color: _isFullyPaid ? AppTheme.successColor : AppTheme.warningColor,
+                size: 24,
+              ),
+              const SizedBox(width: 8),
+              Text(
+                _isFullyPaid ? 'LISTO PARA CONFIRMAR' : 'PAGO PENDIENTE',
+                style: TextStyle(
+                  color: _isFullyPaid ? AppTheme.successColor : AppTheme.warningColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
+        ),
       ],
     );
   }
@@ -560,10 +585,10 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
     );
   }
 
-  Widget _buildPaymentTile(Map<String, dynamic> payment) {
+  Widget _buildPaymentTile(Map<String, dynamic> payment, int index) {
     String methodName;
     IconData methodIcon;
-    
+
     switch (payment['method']) {
       case 'cash':
         methodName = 'Efectivo';
@@ -592,7 +617,7 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
       ),
       child: Row(
         children: [
-          Icon(methodIcon, color: AppTheme.successColor, size: 24),
+          Icon(methodIcon, color: AppTheme.textSecondary, size: 24),
           const SizedBox(width: 12),
           Expanded(
             child: Column(
@@ -606,7 +631,7 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                     color: AppTheme.textPrimary,
                   ),
                 ),
-                if (payment['notes'] != null && payment['notes'].isNotEmpty)
+                if (payment['notes'] != null && (payment['notes'] as String).isNotEmpty)
                   Text(
                     payment['notes'],
                     style: const TextStyle(
@@ -618,12 +643,20 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
             ),
           ),
           Text(
-            '\$${payment['amount'].toStringAsFixed(2)}',
+            CurrencyFormatter.format(payment['amount'] as double),
             style: const TextStyle(
               fontSize: 16,
               fontWeight: FontWeight.bold,
-              color: AppTheme.successColor,
+              color: AppTheme.textPrimary,
             ),
+          ),
+          const SizedBox(width: 12),
+          IconButton(
+            onPressed: _isProcessing ? null : () => _removePayment(index),
+            icon: const Icon(Icons.delete_outline, size: 20),
+            color: AppTheme.errorColor,
+            padding: EdgeInsets.zero,
+            constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
           ),
         ],
       ),
@@ -637,4 +670,3 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
     super.dispose();
   }
 }
-

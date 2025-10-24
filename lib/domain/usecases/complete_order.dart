@@ -1,34 +1,31 @@
 import '../repositories/order_repository.dart';
 import '../repositories/table_repository.dart';
 
-class CancelOrder {
+class CompleteOrder {
   final OrderRepository orderRepository;
   final TableRepository tableRepository;
 
-  CancelOrder({
+  CompleteOrder({
     required this.orderRepository,
     required this.tableRepository,
   });
 
-  /// Cancela un pedido y libera la mesa
+  /// Completa un pedido, lo cierra y libera la mesa
   Future<void> call({
     required int orderId,
     required int tableId,
   }) async {
     try {
-      // 1. Actualizar estado del pedido a 'cancelled'
-      await orderRepository.updateOrderStatus(
-        orderId: orderId,
-        status: 'cancelled',
-      );
+      // 1. Cerrar el pedido (status = 'closed')
+      await orderRepository.closeOrder(orderId);
 
       // 2. Actualizar estado de la mesa a 'available'
       await tableRepository.updateTableStatus(tableId, 'available');
 
-      print('DEBUG CANCEL ORDER: Pedido $orderId cancelado y mesa $tableId liberada');
+      print('DEBUG COMPLETE ORDER: Pedido $orderId completado y mesa $tableId liberada');
     } catch (e) {
-      print('DEBUG CANCEL ORDER: Error al cancelar pedido: $e');
-      throw Exception('Error cancelling order: $e');
+      print('DEBUG COMPLETE ORDER: Error al completar pedido: $e');
+      throw Exception('Error completing order: $e');
     }
   }
 }

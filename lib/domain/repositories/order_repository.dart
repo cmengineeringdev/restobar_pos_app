@@ -29,6 +29,9 @@ abstract class OrderRepository {
   /// Get order by table
   Future<Order?> getOrderByTable(int tableId);
 
+  /// Get order by ID
+  Future<Order?> getOrderById(int orderId);
+
   /// Get order items
   Future<List<OrderItem>> getOrderItems(int orderId);
 
@@ -54,5 +57,22 @@ abstract class OrderRepository {
 
   /// Close order
   Future<void> closeOrder(int orderId);
+
+  /// Get work shift sales summary
+  Future<Map<String, dynamic>> getWorkShiftSalesSummary(int workShiftId);
+
+  /// Get closed orders by work shift
+  Future<List<Map<String, dynamic>>> getClosedOrdersByWorkShift(int workShiftId);
+
+  /// Get order with details (items and payments)
+  Future<Map<String, dynamic>> getOrderWithDetails(int orderId);
+
+  /// Send order to remote API
+  Future<void> sendOrderToRemote({
+    required int orderId,
+    required int tableNumber,
+    required int remoteWorkshiftId,
+    required int remoteSalesPointId,
+  });
 }
 

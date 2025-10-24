@@ -5,6 +5,7 @@ import '../../../core/providers/order_state_notifier.dart';
 import '../../../core/providers/product_state_notifier.dart';
 import '../../../core/providers/table_state_notifier.dart';
 import '../../../core/providers/work_shift_state_notifier.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../../../domain/entities/table.dart' as table_entity;
 import '../payment/payment_page.dart';
 
@@ -174,11 +175,20 @@ class _CreateOrderPageState extends ConsumerState<CreateOrderPage> {
       return;
     }
 
+    // Crear una copia de la orden con los totales actualizados del estado
+    final orderWithTotals = orderState.currentOrder!.copyWith(
+      subtotal: orderState.subtotal,
+      tax: orderState.tax,
+      total: orderState.total,
+    );
+
+    print('DEBUG PAYMENT: Navegando a pago con totales - Subtotal: ${orderWithTotals.subtotal}, Tax: ${orderWithTotals.tax}, Total: ${orderWithTotals.total}');
+
     // Navegar a la pantalla de pago
     final result = await Navigator.push(
       context,
       MaterialPageRoute(
-        builder: (context) => PaymentPage(order: orderState.currentOrder!),
+        builder: (context) => PaymentPage(order: orderWithTotals),
       ),
     );
 
@@ -439,41 +449,59 @@ class _CreateOrderPageState extends ConsumerState<CreateOrderPage> {
   }
 
   Widget _buildProductCard(product) {
-    return InkWell(
-      onTap: () => _addProduct(product),
-      borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-      child: Container(
-        decoration: BoxDecoration(
-          color: AppTheme.surfaceColor,
-          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-          border: Border.all(color: AppTheme.borderColor),
-        ),
-        child: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [
-            const Icon(Icons.fastfood, size: 32, color: AppTheme.primaryColor),
-            const SizedBox(height: 8),
-            Text(
-              product.name,
-              style: const TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 13,
-                fontWeight: FontWeight.w500,
-              ),
-              textAlign: TextAlign.center,
-              maxLines: 2,
-              overflow: TextOverflow.ellipsis,
+    final isAvailable = product.isAvailable;
+
+    return Opacity(
+      opacity: isAvailable ? 1.0 : 0.5,
+      child: InkWell(
+        onTap: isAvailable ? () => _addProduct(product) : null,
+        borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+        child: Container(
+          decoration: BoxDecoration(
+            color: AppTheme.surfaceColor,
+            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+            border: Border.all(
+              color: isAvailable ? AppTheme.borderColor : AppTheme.textDisabled,
             ),
-            const SizedBox(height: 4),
-            Text(
-              '\$${product.salePrice.toStringAsFixed(0)}',
-              style: const TextStyle(
-                color: AppTheme.primaryColor,
-                fontSize: 14,
-                fontWeight: FontWeight.bold,
+          ),
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(Icons.fastfood, size: 32, color: AppTheme.primaryColor),
+              const SizedBox(height: 8),
+              Text(
+                product.name,
+                style: const TextStyle(
+                  color: AppTheme.textPrimary,
+                  fontSize: 13,
+                  fontWeight: FontWeight.w500,
+                ),
+                textAlign: TextAlign.center,
+                maxLines: 2,
+                overflow: TextOverflow.ellipsis,
               ),
-            ),
-          ],
+              if (!isAvailable) ...[
+                const SizedBox(height: 2),
+                const Text(
+                  'No disponible',
+                  style: TextStyle(
+                    color: AppTheme.errorColor,
+                    fontSize: 10,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+              ],
+              const SizedBox(height: 4),
+              Text(
+                CurrencyFormatter.format(product.salePrice),
+                style: const TextStyle(
+                  color: AppTheme.primaryColor,
+                  fontSize: 14,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ],
+          ),
         ),
       ),
     );
@@ -613,7 +641,7 @@ class _CreateOrderPageState extends ConsumerState<CreateOrderPage> {
             children: [
               _buildTotalRow('Subtotal:', orderState.subtotal),
               const SizedBox(height: 4),
-              _buildTotalRow('IVA (19%):', orderState.tax),
+              _buildTotalRow('Imp. Consumo:', orderState.tax),
               const Divider(height: 16, color: AppTheme.borderColor),
               _buildTotalRow('Total:', orderState.total, isBold: true),
               
@@ -758,7 +786,7 @@ class _CreateOrderPageState extends ConsumerState<CreateOrderPage> {
                   overflow: TextOverflow.ellipsis,
                 ),
                 Text(
-                  '\$${item.unitPrice.toStringAsFixed(0)} c/u',
+                  '${CurrencyFormatter.format(item.unitPrice)} c/u',
                   style: const TextStyle(
                     color: AppTheme.textSecondary,
                     fontSize: 11,
@@ -768,7 +796,7 @@ class _CreateOrderPageState extends ConsumerState<CreateOrderPage> {
             ),
           ),
           Text(
-            '\$${item.subtotal.toStringAsFixed(0)}',
+            CurrencyFormatter.format(item.subtotal),
             style: const TextStyle(
               color: AppTheme.textPrimary,
               fontSize: 14,
@@ -809,7 +837,7 @@ class _CreateOrderPageState extends ConsumerState<CreateOrderPage> {
           ),
         ),
         Text(
-          '\$${amount.toStringAsFixed(0)}',
+          CurrencyFormatter.format(amount),
           style: TextStyle(
             color: isBold ? AppTheme.primaryColor : AppTheme.textPrimary,
             fontSize: isBold ? 18 : 14,

@@ -5,6 +5,7 @@ class Product {
   final String? description;
   final double salePrice;
   final bool isActive;
+  final bool isAvailable; // If product is available for sale
   final int? productCategoryId;
   final int? taxRateId;
   final int? formulaId;
@@ -20,6 +21,7 @@ class Product {
     this.description,
     required this.salePrice,
     this.isActive = true,
+    this.isAvailable = true,
     this.productCategoryId,
     this.taxRateId,
     this.formulaId,
@@ -36,6 +38,7 @@ class Product {
     String? description,
     double? salePrice,
     bool? isActive,
+    bool? isAvailable,
     int? productCategoryId,
     int? taxRateId,
     int? formulaId,
@@ -51,6 +54,7 @@ class Product {
       description: description ?? this.description,
       salePrice: salePrice ?? this.salePrice,
       isActive: isActive ?? this.isActive,
+      isAvailable: isAvailable ?? this.isAvailable,
       productCategoryId: productCategoryId ?? this.productCategoryId,
       taxRateId: taxRateId ?? this.taxRateId,
       formulaId: formulaId ?? this.formulaId,
@@ -77,6 +81,7 @@ class Product {
         other.description == description &&
         other.salePrice == salePrice &&
         other.isActive == isActive &&
+        other.isAvailable == isAvailable &&
         other.productCategoryId == productCategoryId &&
         other.taxRateId == taxRateId &&
         other.formulaId == formulaId &&
@@ -94,6 +99,7 @@ class Product {
         description.hashCode ^
         salePrice.hashCode ^
         isActive.hashCode ^
+        isAvailable.hashCode ^
         productCategoryId.hashCode ^
         taxRateId.hashCode ^
         formulaId.hashCode ^

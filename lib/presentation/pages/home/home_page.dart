@@ -6,6 +6,7 @@ import '../../../core/providers/point_of_sale_state_notifier.dart';
 import '../../../core/providers/product_state_notifier.dart';
 import '../../../core/providers/work_shift_state_notifier.dart';
 import '../auth/login_page.dart';
+import '../sales/sales_page.dart';
 import '../tables/tables_page.dart';
 import '../work_shift/work_shift_page.dart';
 
@@ -33,21 +34,42 @@ class _HomePageState extends ConsumerState<HomePage> {
     // Cargar punto de venta y verificar turno activo
     await ref.read(pointOfSaleStateProvider.notifier).loadSelectedPointOfSale();
     final pointOfSaleState = ref.read(pointOfSaleStateProvider);
-    
+
     if (pointOfSaleState.selectedPointOfSale != null) {
       try {
         await ref.read(workShiftStateProvider.notifier).checkActiveWorkShiftRemote(
               pointOfSaleState.selectedPointOfSale!.id,
             );
       } catch (e) {
-        // Error al verificar turno, no hacer nada
+        // Error al verificar turno, no hacer nada 
+      }
+    }
+
+    // Sincronizar productos automáticamente si hay punto de venta seleccionado
+    if (pointOfSaleState.selectedPointOfSale != null) {
+      try {
+        await ref.read(productStateProvider.notifier).syncProducts(
+          pointOfSaleId: pointOfSaleState.selectedPointOfSale!.id,
+        );
+      } catch (e) {
+        // Error al sincronizar productos, continuar sin mostrar error
+        print('Error sincronizando productos: $e');
       }
     }
   }
 
   Future<void> _syncProductsFromApi() async {
+    final pointOfSaleState = ref.read(pointOfSaleStateProvider);
+
+    if (pointOfSaleState.selectedPointOfSale == null) {
+      _showErrorSnackBar('No hay punto de venta seleccionado');
+      return;
+    }
+
     try {
-      await ref.read(productStateProvider.notifier).syncProducts();
+      await ref.read(productStateProvider.notifier).syncProducts(
+        pointOfSaleId: pointOfSaleState.selectedPointOfSale!.id,
+      );
 
       if (mounted) {
         final productState = ref.read(productStateProvider);
@@ -76,9 +98,9 @@ class _HomePageState extends ConsumerState<HomePage> {
     );
   }
 
-  void _navigateToOrders() {
+  Future<void> _navigateToOrders() async {
     final workShiftState = ref.read(workShiftStateProvider);
-    
+
     // Validar que hay un turno abierto
     if (!workShiftState.hasActiveShift) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -105,6 +127,21 @@ class _HomePageState extends ConsumerState<HomePage> {
       );
       return;
     }
+
+    // Sincronizar productos antes de navegar
+    final pointOfSaleState = ref.read(pointOfSaleStateProvider);
+    if (pointOfSaleState.selectedPointOfSale != null) {
+      try {
+        await ref.read(productStateProvider.notifier).syncProducts(
+          pointOfSaleId: pointOfSaleState.selectedPointOfSale!.id,
+        );
+      } catch (e) {
+        // Error al sincronizar, continuar de todos modos
+        print('Error sincronizando productos: $e');
+      }
+    }
+
+    if (!mounted) return;
 
     // Si hay turno abierto, navegar a la vista de mesas
     Navigator.push(
@@ -450,16 +487,28 @@ class _HomePageState extends ConsumerState<HomePage> {
               },
             ),
             _buildModuleCard(
+              title: 'Ventas',
+              description: 'Consulta las ventas del turno actual',
+              icon: Icons.point_of_sale_outlined,
+              onTap: () {
+                final workShiftState = ref.read(workShiftStateProvider);
+                if (!workShiftState.hasActiveShift) {
+                  _showErrorSnackBar('Debe abrir un turno para ver las ventas');
+                  return;
+                }
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => const SalesPage(),
+                  ),
+                );
+              },
+            ),
+            _buildModuleCard(
               title: 'Domicilios',
               description: 'Administra los pedidos a domicilio',
               icon: Icons.delivery_dining_outlined,
               onTap: () => _showModuleInProgress('Domicilios'),
-            ),
-            _buildModuleCard(
-              title: 'Inventario',
-              description: 'Consulta y actualiza el inventario',
-              icon: Icons.inventory_2_outlined,
-              onTap: () => _showModuleInProgress('Inventario'),
             ),
           ],
         );

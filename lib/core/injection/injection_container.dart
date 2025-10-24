@@ -7,6 +7,7 @@ import '../../data/datasources/local/product_local_datasource.dart';
 import '../../data/datasources/local/table_local_datasource.dart';
 import '../../data/datasources/local/work_shift_local_datasource.dart';
 import '../../data/datasources/remote/auth_remote_datasource.dart';
+import '../../data/datasources/remote/order_remote_datasource.dart';
 import '../../data/datasources/remote/point_of_sale_remote_datasource.dart';
 import '../../data/datasources/remote/product_remote_datasource.dart';
 import '../../data/datasources/remote/work_shift_remote_datasource.dart';
@@ -230,8 +231,13 @@ class InjectionContainer {
       localDataSource: tableLocalDataSource,
     );
 
+    final orderRemoteDataSource = OrderRemoteDataSourceImpl(
+      httpClient: httpClient,
+    );
+
     orderRepository = OrderRepositoryImpl(
       localDataSource: orderLocalDataSource,
+      remoteDataSource: orderRemoteDataSource,
     );
 
     paymentRepository = PaymentRepositoryImpl(

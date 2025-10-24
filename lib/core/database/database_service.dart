@@ -30,7 +30,7 @@ class DatabaseService {
     Database db = await databaseFactoryFfi.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 8, // Incrementado para agregar tabla payments
+        version: 9, // Incrementado para agregar is_available a products
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       ),
@@ -50,6 +50,7 @@ class DatabaseService {
         description TEXT,
         sale_price REAL NOT NULL,
         is_active INTEGER DEFAULT 1,
+        is_available INTEGER DEFAULT 1,
         product_category_id INTEGER,
         tax_rate_id INTEGER,
         formula_id INTEGER,
@@ -396,6 +397,13 @@ class DatabaseService {
 
       await db.execute('''
         CREATE INDEX IF NOT EXISTS idx_payment_status ON payments(status)
+      ''');
+    }
+
+    // Migration from version 8 to 9: Add is_available column to products
+    if (oldVersion < 9) {
+      await db.execute('''
+        ALTER TABLE products ADD COLUMN is_available INTEGER DEFAULT 1
       ''');
     }
   }

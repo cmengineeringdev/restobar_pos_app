@@ -210,3 +210,6 @@ log show --predicate 'process == "restobar_pos_app"' --last 5m | grep sandbox
 **⚡ Próximo Paso**: Aplicar los cambios recomendados en `Release.entitlements`
 
 
+
+
+
