@@ -140,6 +140,7 @@ class OrderRepositoryImpl implements OrderRepository {
     required int orderId,
     required double subtotal,
     required double tax,
+    double? tip,
     required double total,
   }) async {
     try {
@@ -156,6 +157,7 @@ class OrderRepositoryImpl implements OrderRepository {
         status: currentOrder.status,
         subtotal: subtotal,
         tax: tax,
+        tip: tip ?? currentOrder.tip,
         total: total,
         notes: currentOrder.notes,
         createdAt: currentOrder.createdAt,
@@ -163,7 +165,7 @@ class OrderRepositoryImpl implements OrderRepository {
       );
 
       await localDataSource.updateOrder(updatedOrder);
-      print('DEBUG REPO: Totales actualizados - Subtotal: $subtotal, Tax: $tax, Total: $total');
+      print('DEBUG REPO: Totales actualizados - Subtotal: $subtotal, Tax: $tax, Tip: ${tip ?? currentOrder.tip}, Total: $total');
     } catch (e) {
       throw Exception('Error updating order totals: $e');
     }

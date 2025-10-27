@@ -8,6 +8,8 @@ class OrderItemModel {
   final int quantity;
   final double unitPrice;
   final double subtotal;
+  final double taxRate;
+  final double taxAmount;
   final DateTime createdAt;
 
   OrderItemModel({
@@ -18,6 +20,8 @@ class OrderItemModel {
     required this.quantity,
     required this.unitPrice,
     required this.subtotal,
+    this.taxRate = 0.0,
+    this.taxAmount = 0.0,
     required this.createdAt,
   });
 
@@ -31,6 +35,8 @@ class OrderItemModel {
       quantity: map['quantity'] as int,
       unitPrice: (map['unit_price'] as num).toDouble(),
       subtotal: (map['subtotal'] as num).toDouble(),
+      taxRate: map['tax_rate'] != null ? (map['tax_rate'] as num).toDouble() : 0.0,
+      taxAmount: map['tax_amount'] != null ? (map['tax_amount'] as num).toDouble() : 0.0,
       createdAt: DateTime.parse(map['created_at'] as String),
     );
   }
@@ -45,6 +51,8 @@ class OrderItemModel {
       'quantity': quantity,
       'unit_price': unitPrice,
       'subtotal': subtotal,
+      'tax_rate': taxRate,
+      'tax_amount': taxAmount,
       'created_at': createdAt.toIso8601String(),
     };
   }
@@ -59,6 +67,8 @@ class OrderItemModel {
       quantity: quantity,
       unitPrice: unitPrice,
       subtotal: subtotal,
+      taxRate: taxRate,
+      taxAmount: taxAmount,
       createdAt: createdAt,
     );
   }
@@ -73,6 +83,8 @@ class OrderItemModel {
       quantity: item.quantity,
       unitPrice: item.unitPrice,
       subtotal: item.subtotal,
+      taxRate: item.taxRate,
+      taxAmount: item.taxAmount,
       createdAt: item.createdAt,
     );
   }

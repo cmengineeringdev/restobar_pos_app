@@ -30,7 +30,7 @@ class DatabaseService {
     Database db = await databaseFactoryFfi.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 9, // Incrementado para agregar is_available a products
+        version: 12, // Incrementado para agregar tax_rate y tax_amount a order_items
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       ),
@@ -53,6 +53,7 @@ class DatabaseService {
         is_available INTEGER DEFAULT 1,
         product_category_id INTEGER,
         tax_rate_id INTEGER,
+        tax_rate REAL,
         formula_id INTEGER,
         formula_code TEXT,
         formula_name TEXT,
@@ -146,6 +147,7 @@ class DatabaseService {
         status TEXT NOT NULL DEFAULT 'open',
         subtotal REAL NOT NULL DEFAULT 0,
         tax REAL NOT NULL DEFAULT 0,
+        tip REAL NOT NULL DEFAULT 0,
         total REAL NOT NULL DEFAULT 0,
         notes TEXT,
         created_at TEXT NOT NULL,
@@ -176,6 +178,8 @@ class DatabaseService {
         quantity INTEGER NOT NULL DEFAULT 1,
         unit_price REAL NOT NULL,
         subtotal REAL NOT NULL,
+        tax_rate REAL NOT NULL DEFAULT 0,
+        tax_amount REAL NOT NULL DEFAULT 0,
         created_at TEXT NOT NULL,
         FOREIGN KEY (order_id) REFERENCES orders(id) ON DELETE CASCADE
       )
@@ -404,6 +408,30 @@ class DatabaseService {
     if (oldVersion < 9) {
       await db.execute('''
         ALTER TABLE products ADD COLUMN is_available INTEGER DEFAULT 1
+      ''');
+    }
+
+    // Migration from version 9 to 10: Add tip column to orders
+    if (oldVersion < 10) {
+      await db.execute('''
+        ALTER TABLE orders ADD COLUMN tip REAL NOT NULL DEFAULT 0
+      ''');
+    }
+
+    // Migration from version 10 to 11: Add tax_rate column to products
+    if (oldVersion < 11) {
+      await db.execute('''
+        ALTER TABLE products ADD COLUMN tax_rate REAL
+      ''');
+    }
+
+    // Migration from version 11 to 12: Add tax_rate and tax_amount columns to order_items
+    if (oldVersion < 12) {
+      await db.execute('''
+        ALTER TABLE order_items ADD COLUMN tax_rate REAL NOT NULL DEFAULT 0
+      ''');
+      await db.execute('''
+        ALTER TABLE order_items ADD COLUMN tax_amount REAL NOT NULL DEFAULT 0
       ''');
     }
   }

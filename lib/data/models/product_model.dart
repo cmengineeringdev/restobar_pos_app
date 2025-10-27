@@ -11,6 +11,7 @@ class ProductModel extends Product {
     super.isAvailable = true,
     super.productCategoryId,
     super.taxRateId,
+    super.taxRate,
     super.formulaId,
     super.formulaCode,
     super.formulaName,
@@ -23,6 +24,12 @@ class ProductModel extends Product {
   factory ProductModel.fromJson(Map<String, dynamic> json) {
     final now = DateTime.now();
 
+    // Extract tax rate from nested taxRate object
+    final taxRateData = json['taxRate'] as Map<String, dynamic>?;
+    final taxRatePercentage = taxRateData != null
+        ? (taxRateData['rate'] as num?)?.toDouble()
+        : null;
+
     return ProductModel(
       remoteId: json['id'] as int, // API's ID becomes our remoteId
       name: json['name'] as String,
@@ -32,6 +39,7 @@ class ProductModel extends Product {
       isAvailable: json['isAvailable'] as bool? ?? true,
       productCategoryId: json['productCategoryId'] as int?,
       taxRateId: json['taxRateId'] as int?,
+      taxRate: taxRatePercentage, // Extract rate percentage
       formulaId: json['formulaId'] as int?,
       formulaCode: json['formula']?['code'] as String?,
       formulaName: json['formula']?['name'] as String?,
@@ -52,6 +60,7 @@ class ProductModel extends Product {
       isAvailable: (map['is_available'] as int? ?? 1) == 1,
       productCategoryId: map['product_category_id'] as int?,
       taxRateId: map['tax_rate_id'] as int?,
+      taxRate: map['tax_rate'] != null ? (map['tax_rate'] as num).toDouble() : null,
       formulaId: map['formula_id'] as int?,
       formulaCode: map['formula_code'] as String?,
       formulaName: map['formula_name'] as String?,
@@ -74,6 +83,7 @@ class ProductModel extends Product {
       'is_available': isAvailable ? 1 : 0,
       'product_category_id': productCategoryId,
       'tax_rate_id': taxRateId,
+      'tax_rate': taxRate,
       'formula_id': formulaId,
       'formula_code': formulaCode,
       'formula_name': formulaName,
@@ -108,6 +118,7 @@ class ProductModel extends Product {
       isAvailable: product.isAvailable,
       productCategoryId: product.productCategoryId,
       taxRateId: product.taxRateId,
+      taxRate: product.taxRate,
       formulaId: product.formulaId,
       formulaCode: product.formulaCode,
       formulaName: product.formulaName,
@@ -128,6 +139,7 @@ class ProductModel extends Product {
       isAvailable: isAvailable,
       productCategoryId: productCategoryId,
       taxRateId: taxRateId,
+      taxRate: taxRate,
       formulaId: formulaId,
       formulaCode: formulaCode,
       formulaName: formulaName,

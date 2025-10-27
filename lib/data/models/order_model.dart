@@ -7,6 +7,7 @@ class OrderModel {
   final String status;
   final double subtotal;
   final double tax;
+  final double tip;
   final double total;
   final String? notes;
   final DateTime createdAt;
@@ -20,6 +21,7 @@ class OrderModel {
     required this.status,
     required this.subtotal,
     required this.tax,
+    this.tip = 0,
     required this.total,
     this.notes,
     required this.createdAt,
@@ -36,6 +38,7 @@ class OrderModel {
       status: map['status'] as String,
       subtotal: (map['subtotal'] as num).toDouble(),
       tax: (map['tax'] as num).toDouble(),
+      tip: map['tip'] != null ? (map['tip'] as num).toDouble() : 0,
       total: (map['total'] as num).toDouble(),
       notes: map['notes'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
@@ -57,6 +60,7 @@ class OrderModel {
       'status': status,
       'subtotal': subtotal,
       'tax': tax,
+      'tip': tip,
       'total': total,
       'notes': notes,
       'created_at': createdAt.toIso8601String(),
@@ -74,6 +78,7 @@ class OrderModel {
       status: status,
       subtotal: subtotal,
       tax: tax,
+      tip: tip,
       total: total,
       notes: notes,
       createdAt: createdAt,
@@ -91,6 +96,7 @@ class OrderModel {
       status: order.status,
       subtotal: order.subtotal,
       tax: order.tax,
+      tip: order.tip,
       total: order.total,
       notes: order.notes,
       createdAt: order.createdAt,

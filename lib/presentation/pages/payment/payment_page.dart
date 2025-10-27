@@ -24,15 +24,19 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
   bool _isProcessing = false;
   List<Map<String, dynamic>> _payments = [];
   double _totalPaid = 0.0;
+  late double _currentTip;
 
   @override
   void initState() {
     super.initState();
+    // Establecer propina: si es 0, calcular 10% del subtotal
+    _currentTip = widget.order.tip > 0 ? widget.order.tip : (widget.order.subtotal * 0.10);
     // Por defecto, establecer el monto al total pendiente
-    _amountController.text = widget.order.total.toStringAsFixed(0);
+    _amountController.text = _calculatedTotal.toStringAsFixed(0);
   }
 
-  double get _remaining => widget.order.total - _totalPaid;
+  double get _calculatedTotal => widget.order.subtotal + widget.order.tax + _currentTip;
+  double get _remaining => _calculatedTotal - _totalPaid;
   bool get _isFullyPaid => _remaining <= 0.01; // Pequeña tolerancia para decimales
 
   void _addPayment() {
@@ -74,7 +78,7 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
       _payments.removeAt(index);
 
       if (_payments.isEmpty) {
-        _amountController.text = widget.order.total.toStringAsFixed(0);
+        _amountController.text = _calculatedTotal.toStringAsFixed(0);
       } else {
         final newRemaining = _remaining;
         if (newRemaining > 0) {
@@ -100,6 +104,18 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
     setState(() => _isProcessing = true);
 
     try {
+      // Actualizar totales de la orden incluyendo la propina
+      final updateOrderTotals = ref.read(updateOrderTotalsProvider);
+      await updateOrderTotals(
+        orderId: widget.order.id!,
+        subtotal: widget.order.subtotal,
+        tax: widget.order.tax,
+        tip: _currentTip,
+        total: _calculatedTotal,
+      );
+
+      if (!mounted) return;
+
       final createPayment = ref.read(createPaymentProvider);
 
       // Guardar todos los pagos en la base de datos
@@ -152,12 +168,149 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
   }
 
   void _showSnackBar(String message, {required bool isError}) {
+    // Limpiar cualquier SnackBar anterior para evitar que se encolen
+    ScaffoldMessenger.of(context).clearSnackBars();
+
     ScaffoldMessenger.of(context).showSnackBar(
       SnackBar(
         content: Text(message),
         backgroundColor: isError ? AppTheme.errorColor : AppTheme.successColor,
         duration: Duration(seconds: isError ? 3 : 2),
       ),
+    );
+  }
+
+  Future<void> _showEditTipDialog() async {
+    final TextEditingController tipController = TextEditingController(
+      text: _currentTip.toStringAsFixed(0),
+    );
+
+    final result = await showDialog<double>(
+      context: context,
+      builder: (context) => AlertDialog(
+        backgroundColor: AppTheme.surfaceColor,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(12),
+        ),
+        title: const Text(
+          'Editar Propina',
+          style: TextStyle(
+            color: AppTheme.textPrimary,
+            fontSize: 18,
+            fontWeight: FontWeight.bold,
+          ),
+        ),
+        content: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              'Subtotal: ${CurrencyFormatter.format(widget.order.subtotal)}',
+              style: const TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 13,
+              ),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: tipController,
+              keyboardType: TextInputType.number,
+              autofocus: true,
+              decoration: InputDecoration(
+                labelText: 'Monto de propina',
+                hintText: '0',
+                prefixText: '\$ ',
+                border: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppTheme.borderColor),
+                ),
+                focusedBorder: OutlineInputBorder(
+                  borderRadius: BorderRadius.circular(8),
+                  borderSide: const BorderSide(color: AppTheme.primaryColor),
+                ),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+              ),
+              style: const TextStyle(color: AppTheme.textPrimary),
+            ),
+            const SizedBox(height: 16),
+            const Text(
+              'Sugerencias:',
+              style: TextStyle(
+                color: AppTheme.textSecondary,
+                fontSize: 12,
+                fontWeight: FontWeight.w600,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8,
+              children: [
+                _buildTipSuggestionChip(widget.order.subtotal, 0, 'Sin propina', tipController),
+                _buildTipSuggestionChip(widget.order.subtotal, 10, '10%', tipController),
+                _buildTipSuggestionChip(widget.order.subtotal, 15, '15%', tipController),
+                _buildTipSuggestionChip(widget.order.subtotal, 20, '20%', tipController),
+              ],
+            ),
+          ],
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(null),
+            child: const Text(
+              'Cancelar',
+              style: TextStyle(color: AppTheme.textSecondary),
+            ),
+          ),
+          ElevatedButton(
+            onPressed: () {
+              final value = double.tryParse(tipController.text) ?? 0;
+              Navigator.of(context).pop(value);
+            },
+            style: ElevatedButton.styleFrom(
+              backgroundColor: AppTheme.primaryColor,
+              foregroundColor: Colors.white,
+              shape: RoundedRectangleBorder(
+                borderRadius: BorderRadius.circular(8),
+              ),
+              elevation: 0,
+            ),
+            child: const Text('Aplicar'),
+          ),
+        ],
+      ),
+    );
+
+    if (result != null) {
+      setState(() {
+        _currentTip = result;
+        // Recalcular el monto pendiente
+        if (_payments.isEmpty) {
+          _amountController.text = _calculatedTotal.toStringAsFixed(0);
+        } else {
+          final newRemaining = _remaining;
+          if (newRemaining > 0) {
+            _amountController.text = newRemaining.toStringAsFixed(0);
+          }
+        }
+      });
+    }
+
+    tipController.dispose();
+  }
+
+  Widget _buildTipSuggestionChip(double subtotal, int percentage, String label, TextEditingController controller) {
+    final amount = subtotal * (percentage / 100);
+    return ActionChip(
+      label: Text(label),
+      labelStyle: const TextStyle(
+        fontSize: 12,
+        color: AppTheme.textPrimary,
+      ),
+      backgroundColor: AppTheme.backgroundColor,
+      side: const BorderSide(color: AppTheme.borderColor),
+      onPressed: () {
+        controller.text = amount.toStringAsFixed(0);
+      },
     );
   }
 
@@ -490,10 +643,12 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                 _buildSummaryRow('Subtotal', CurrencyFormatter.format(widget.order.subtotal)),
                 const SizedBox(height: 8),
                 _buildSummaryRow('Imp. Consumo', CurrencyFormatter.format(widget.order.tax)),
+                const SizedBox(height: 8),
+                _buildEditableTipRow(),
                 const SizedBox(height: 12),
                 const Divider(color: AppTheme.borderColor, thickness: 2),
                 const SizedBox(height: 12),
-                _buildSummaryRow('Total', CurrencyFormatter.format(widget.order.total), isBold: true, isLarge: true),
+                _buildSummaryRow('Total', CurrencyFormatter.format(_calculatedTotal), isBold: true, isLarge: true),
                 
                 if (_totalPaid > 0) ...[
                   const SizedBox(height: 16),
@@ -583,6 +738,53 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
         ),
       ],
     );
+  }
+
+  Widget _buildEditableTipRow() {
+    final hasPayments = _payments.isNotEmpty;
+
+    return InkWell(
+      onTap: hasPayments ? _showCannotEditTipMessage : _showEditTipDialog,
+      borderRadius: BorderRadius.circular(4),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 4),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                Text(
+                  'Propina (opcional)',
+                  style: TextStyle(
+                    color: hasPayments ? AppTheme.textDisabled : AppTheme.textSecondary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.normal,
+                  ),
+                ),
+                const SizedBox(width: 6),
+                Icon(
+                  hasPayments ? Icons.lock : Icons.edit,
+                  size: 16,
+                  color: hasPayments ? AppTheme.textDisabled : AppTheme.primaryColor,
+                ),
+              ],
+            ),
+            Text(
+              CurrencyFormatter.format(_currentTip),
+              style: TextStyle(
+                color: hasPayments ? AppTheme.textDisabled : AppTheme.textPrimary,
+                fontSize: 14,
+                fontWeight: FontWeight.w500,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showCannotEditTipMessage() {
+    _showSnackBar('Elimine los pagos agregados para modificar la propina', isError: true);
   }
 
   Widget _buildPaymentTile(Map<String, dynamic> payment, int index) {

@@ -9,12 +9,14 @@ class UpdateOrderTotals {
     required int orderId,
     required double subtotal,
     required double tax,
+    double? tip,
     required double total,
   }) async {
     return await repository.updateOrderTotals(
       orderId: orderId,
       subtotal: subtotal,
       tax: tax,
+      tip: tip,
       total: total,
     );
   }

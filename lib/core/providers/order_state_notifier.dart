@@ -20,6 +20,7 @@ class OrderState {
   final String? error;
   final double subtotal;
   final double tax;
+  final double tip; // Propina
   final double total;
   final bool isConfirmed; // Si el pedido ya fue confirmado
 
@@ -31,6 +32,7 @@ class OrderState {
     this.error,
     this.subtotal = 0,
     this.tax = 0,
+    this.tip = 0,
     this.total = 0,
     this.isConfirmed = false,
   });
@@ -43,6 +45,7 @@ class OrderState {
     String? error,
     double? subtotal,
     double? tax,
+    double? tip,
     double? total,
     bool? isConfirmed,
     bool clearError = false,
@@ -56,6 +59,7 @@ class OrderState {
       error: clearError ? null : (error ?? this.error),
       subtotal: subtotal ?? this.subtotal,
       tax: tax ?? this.tax,
+      tip: tip ?? this.tip,
       total: total ?? this.total,
       isConfirmed: isConfirmed ?? this.isConfirmed,
     );
@@ -113,10 +117,11 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
 
         // Calcular totales desde los items
         final subtotal = _calculateSubtotal(items);
-        final tax = _calculateTax(subtotal);
-        final total = subtotal + tax;
-        
-        print('DEBUG ORDER: Totales calculados - Subtotal: $subtotal, Tax: $tax, Total: $total');
+        final tax = _calculateTax(items); // Ahora recibe items en vez de subtotal
+        final tip = order.tip; // Mantener la propina guardada en DB
+        final total = subtotal + tax + tip;
+
+        print('DEBUG ORDER: Totales calculados - Subtotal: $subtotal, Tax: $tax, Tip: $tip, Total: $total');
 
         // Si los totales en DB están desactualizados, actualizarlos
         if (order.total != total) {
@@ -125,16 +130,18 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
             orderId: order.id!,
             subtotal: subtotal,
             tax: tax,
+            tip: tip,
             total: total,
           );
         }
 
         _safeSetState(state.copyWith(
-          currentOrder: order.copyWith(subtotal: subtotal, tax: tax, total: total),
+          currentOrder: order.copyWith(subtotal: subtotal, tax: tax, tip: tip, total: total),
           items: items,
           temporaryItems: [],
           subtotal: subtotal,
           tax: tax,
+          tip: tip,
           total: total,
           isConfirmed: true,
           isLoading: false,
@@ -143,13 +150,14 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
       } else {
         // No hay orden confirmada, trabajar con items temporales
         print('DEBUG ORDER: No hay orden confirmada, iniciando con items temporales');
-        
+
         _safeSetState(state.copyWith(
           currentOrder: null,
           items: [],
           temporaryItems: [],
           subtotal: 0,
           tax: 0,
+          tip: 0,
           total: 0,
           isConfirmed: false,
           isLoading: false,
@@ -171,6 +179,7 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
     required int productId,
     required String productName,
     required double unitPrice,
+    double? taxRate, // Tax rate percentage from product (null = no tax)
     int quantity = 1,
   }) {
     if (!mounted) return; // No actualizar si no hay listeners
@@ -192,23 +201,35 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
         final newQuantity = existingItem.quantity + quantity;
         final newSubtotal = newQuantity * unitPrice;
 
+        // Recalcular impuesto con la nueva cantidad
+        final itemTaxRate = taxRate ?? 0.0; // Si es null, usar 0
+        final newTaxAmount = newSubtotal * (itemTaxRate / 100);
+
         print('DEBUG ORDER: Producto ya existe, aumentando cantidad de ${existingItem.quantity} a $newQuantity');
 
         currentTempItems[existingIndex] = existingItem.copyWith(
           quantity: newQuantity,
           subtotal: newSubtotal,
+          taxRate: itemTaxRate,
+          taxAmount: newTaxAmount,
         );
       } else {
         // Si no existe, agregarlo como nuevo item temporal
         print('DEBUG ORDER: Producto nuevo, agregando a temporales');
-        
+
+        final itemSubtotal = quantity * unitPrice;
+        final itemTaxRate = taxRate ?? 0.0; // Si es null, usar 0
+        final itemTaxAmount = itemSubtotal * (itemTaxRate / 100);
+
         final newItem = OrderItem(
           productId: productId,
           orderId: 0, // No tiene orden aún
           productName: productName,
           quantity: quantity,
           unitPrice: unitPrice,
-          subtotal: quantity * unitPrice,
+          subtotal: itemSubtotal,
+          taxRate: itemTaxRate,
+          taxAmount: itemTaxAmount,
           createdAt: DateTime.now(),
         );
 
@@ -217,18 +238,20 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
 
       // Recalcular totales
       final subtotal = _calculateSubtotal(currentTempItems);
-      final tax = _calculateTax(subtotal);
-      final total = subtotal + tax;
+      final tax = _calculateTax(currentTempItems); // Ahora recibe items
+      final tip = _calculateTip(subtotal); // Calcular propina automáticamente (10%)
+      final total = subtotal + tax + tip;
 
       _safeSetState(state.copyWith(
         temporaryItems: currentTempItems,
         subtotal: subtotal,
         tax: tax,
+        tip: tip,
         total: total,
         clearError: true,
       ));
 
-      print('DEBUG ORDER: Producto agregado a temporales. Total: \$$total');
+      print('DEBUG ORDER: Producto agregado a temporales. Subtotal: \$$subtotal, Tax: \$$tax, Tip: \$$tip, Total: \$$total');
     } catch (e) {
       print('DEBUG ORDER: Error al agregar producto: $e');
       _safeSetState(state.copyWith(
@@ -251,18 +274,20 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
 
       // Recalcular totales
       final subtotal = _calculateSubtotal(currentTempItems);
-      final tax = _calculateTax(subtotal);
-      final total = subtotal + tax;
+      final tax = _calculateTax(currentTempItems); // Ahora recibe items
+      final tip = _calculateTip(subtotal); // Recalcular propina automáticamente
+      final total = subtotal + tax + tip;
 
       _safeSetState(state.copyWith(
         temporaryItems: currentTempItems,
         subtotal: subtotal,
         tax: tax,
+        tip: tip,
         total: total,
         clearError: true,
       ));
 
-      print('DEBUG ORDER: Item temporal eliminado. Total: \$$total');
+      print('DEBUG ORDER: Item temporal eliminado. Subtotal: \$$subtotal, Tax: \$$tax, Tip: \$$tip, Total: \$$total');
     } catch (e) {
       print('DEBUG ORDER: Error al eliminar item temporal: $e');
       _safeSetState(state.copyWith(
@@ -328,6 +353,7 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
         orderId: order.id!,
         subtotal: state.subtotal,
         tax: state.tax,
+        tip: state.tip,
         total: state.total,
       );
 
@@ -349,6 +375,7 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
         temporaryItems: [], // Limpiar items temporales
         subtotal: confirmedOrder?.subtotal ?? state.subtotal,
         tax: confirmedOrder?.tax ?? state.tax,
+        tip: confirmedOrder?.tip ?? state.tip,
         total: confirmedOrder?.total ?? state.total,
         isConfirmed: true,
         isLoading: false,
@@ -371,9 +398,40 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
     return items.fold(0, (sum, item) => sum + item.subtotal);
   }
 
-  /// Calcular impuesto de consumo (19%)
-  double _calculateTax(double subtotal) {
-    return subtotal * 0.19;
+  /// Calcular impuesto total sumando el impuesto de cada item
+  /// (Cada item tiene su propio taxRate y taxAmount calculado)
+  double _calculateTax(List<OrderItem> items) {
+    return items.fold(0.0, (sum, item) => sum + item.taxAmount);
+  }
+
+  /// Calcular propina (10% del subtotal por defecto)
+  double _calculateTip(double subtotal) {
+    return subtotal * 0.10;
+  }
+
+  /// Actualizar propina manualmente
+  void updateTip(double newTip) {
+    if (!mounted) return;
+
+    try {
+      print('DEBUG ORDER: Actualizando propina a \$$newTip');
+
+      // Recalcular el total con la nueva propina
+      final total = state.subtotal + state.tax + newTip;
+
+      _safeSetState(state.copyWith(
+        tip: newTip,
+        total: total,
+        clearError: true,
+      ));
+
+      print('DEBUG ORDER: Propina actualizada. Nuevo total: \$$total');
+    } catch (e) {
+      print('DEBUG ORDER: Error al actualizar propina: $e');
+      _safeSetState(state.copyWith(
+        error: e.toString().replaceAll('Exception: ', ''),
+      ));
+    }
   }
 
   /// Actualizar notas del pedido

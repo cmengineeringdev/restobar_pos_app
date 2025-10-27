@@ -5,6 +5,7 @@ class Order {
   final String status; // 'open', 'closed', 'cancelled'
   final double subtotal;
   final double tax;
+  final double tip; // Propina
   final double total;
   final String? notes; // Notas u observaciones del pedido
   final DateTime createdAt;
@@ -18,6 +19,7 @@ class Order {
     required this.status,
     required this.subtotal,
     required this.tax,
+    this.tip = 0,
     required this.total,
     this.notes,
     required this.createdAt,
@@ -32,6 +34,7 @@ class Order {
     String? status,
     double? subtotal,
     double? tax,
+    double? tip,
     double? total,
     String? notes,
     DateTime? createdAt,
@@ -45,6 +48,7 @@ class Order {
       status: status ?? this.status,
       subtotal: subtotal ?? this.subtotal,
       tax: tax ?? this.tax,
+      tip: tip ?? this.tip,
       total: total ?? this.total,
       notes: notes ?? this.notes,
       createdAt: createdAt ?? this.createdAt,

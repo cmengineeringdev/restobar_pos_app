@@ -40,6 +40,7 @@ abstract class OrderRepository {
     required int orderId,
     required double subtotal,
     required double tax,
+    double? tip,
     required double total,
   });
 

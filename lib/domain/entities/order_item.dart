@@ -6,6 +6,8 @@ class OrderItem {
   final int quantity;
   final double unitPrice;
   final double subtotal;
+  final double taxRate; // Tax rate percentage (e.g., 16.0 for 16%)
+  final double taxAmount; // Calculated tax for this item
   final DateTime createdAt;
 
   OrderItem({
@@ -16,6 +18,8 @@ class OrderItem {
     required this.quantity,
     required this.unitPrice,
     required this.subtotal,
+    this.taxRate = 0.0, // Default to 0 if no tax
+    this.taxAmount = 0.0, // Default to 0 if no tax
     required this.createdAt,
   });
 
@@ -27,6 +31,8 @@ class OrderItem {
     int? quantity,
     double? unitPrice,
     double? subtotal,
+    double? taxRate,
+    double? taxAmount,
     DateTime? createdAt,
   }) {
     return OrderItem(
@@ -37,6 +43,8 @@ class OrderItem {
       quantity: quantity ?? this.quantity,
       unitPrice: unitPrice ?? this.unitPrice,
       subtotal: subtotal ?? this.subtotal,
+      taxRate: taxRate ?? this.taxRate,
+      taxAmount: taxAmount ?? this.taxAmount,
       createdAt: createdAt ?? this.createdAt,
     );
   }

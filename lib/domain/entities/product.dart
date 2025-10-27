@@ -8,6 +8,7 @@ class Product {
   final bool isAvailable; // If product is available for sale
   final int? productCategoryId;
   final int? taxRateId;
+  final double? taxRate; // Tax rate percentage (e.g., 16.0 for 16%)
   final int? formulaId;
   final String? formulaCode;
   final String? formulaName;
@@ -24,6 +25,7 @@ class Product {
     this.isAvailable = true,
     this.productCategoryId,
     this.taxRateId,
+    this.taxRate,
     this.formulaId,
     this.formulaCode,
     this.formulaName,
@@ -41,6 +43,7 @@ class Product {
     bool? isAvailable,
     int? productCategoryId,
     int? taxRateId,
+    double? taxRate,
     int? formulaId,
     String? formulaCode,
     String? formulaName,
@@ -57,6 +60,7 @@ class Product {
       isAvailable: isAvailable ?? this.isAvailable,
       productCategoryId: productCategoryId ?? this.productCategoryId,
       taxRateId: taxRateId ?? this.taxRateId,
+      taxRate: taxRate ?? this.taxRate,
       formulaId: formulaId ?? this.formulaId,
       formulaCode: formulaCode ?? this.formulaCode,
       formulaName: formulaName ?? this.formulaName,
@@ -84,6 +88,7 @@ class Product {
         other.isAvailable == isAvailable &&
         other.productCategoryId == productCategoryId &&
         other.taxRateId == taxRateId &&
+        other.taxRate == taxRate &&
         other.formulaId == formulaId &&
         other.formulaCode == formulaCode &&
         other.formulaName == formulaName &&
@@ -102,6 +107,7 @@ class Product {
         isAvailable.hashCode ^
         productCategoryId.hashCode ^
         taxRateId.hashCode ^
+        taxRate.hashCode ^
         formulaId.hashCode ^
         formulaCode.hashCode ^
         formulaName.hashCode ^

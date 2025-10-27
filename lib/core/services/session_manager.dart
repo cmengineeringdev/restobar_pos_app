@@ -71,6 +71,7 @@ class SessionManager {
   /// Mostrar mensaje de sesión expirada
   void _showSessionExpiredMessage() {
     if (_scaffoldMessengerKey?.currentState != null) {
+      _scaffoldMessengerKey!.currentState!.clearSnackBars();
       _scaffoldMessengerKey!.currentState!.showSnackBar(
         const SnackBar(
           content: Text('Tu sesión ha expirado. Por favor inicia sesión nuevamente.'),

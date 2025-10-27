@@ -5,6 +5,7 @@ import '../../../core/providers/auth_state_notifier.dart';
 import '../../../core/providers/point_of_sale_state_notifier.dart';
 import '../../../core/providers/product_state_notifier.dart';
 import '../../../core/providers/work_shift_state_notifier.dart';
+import '../../../core/utils/message_helper.dart';
 import '../auth/login_page.dart';
 import '../sales/sales_page.dart';
 import '../tables/tables_page.dart';
@@ -62,7 +63,7 @@ class _HomePageState extends ConsumerState<HomePage> {
     final pointOfSaleState = ref.read(pointOfSaleStateProvider);
 
     if (pointOfSaleState.selectedPointOfSale == null) {
-      _showErrorSnackBar('No hay punto de venta seleccionado');
+      context.showError('No hay punto de venta seleccionado');
       return;
     }
 
@@ -74,28 +75,18 @@ class _HomePageState extends ConsumerState<HomePage> {
       if (mounted) {
         final productState = ref.read(productStateProvider);
         if (productState.successMessage != null) {
-          _showSuccessSnackBar(productState.successMessage!);
+          context.showSuccess(productState.successMessage!);
         }
       }
     } catch (e) {
       if (mounted) {
-        _showErrorSnackBar('Error al sincronizar productos: $e');
+        context.showError('Error al sincronizar productos: $e');
       }
     }
   }
 
   void _showModuleInProgress(String moduleName) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text('El módulo "$moduleName" está en proceso de desarrollo'),
-        backgroundColor: AppTheme.warningColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-        ),
-        duration: const Duration(seconds: 2),
-      ),
-    );
+    context.showWarning('El módulo "$moduleName" está en proceso de desarrollo');
   }
 
   Future<void> _navigateToOrders() async {
@@ -103,26 +94,19 @@ class _HomePageState extends ConsumerState<HomePage> {
 
     // Validar que hay un turno abierto
     if (!workShiftState.hasActiveShift) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('Debe abrir un turno antes de gestionar pedidos'),
-          backgroundColor: AppTheme.warningColor,
-          behavior: SnackBarBehavior.floating,
-          shape: RoundedRectangleBorder(
-            borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-          ),
-          action: SnackBarAction(
-            label: 'Abrir Turno',
-            textColor: Colors.white,
-            onPressed: () {
-              Navigator.push(
-                context,
-                MaterialPageRoute(
-                  builder: (context) => const WorkShiftPage(),
-                ),
-              );
-            },
-          ),
+      context.showWarning(
+        'Debe abrir un turno antes de gestionar pedidos',
+        action: SnackBarAction(
+          label: 'Abrir Turno',
+          textColor: Colors.white,
+          onPressed: () {
+            Navigator.push(
+              context,
+              MaterialPageRoute(
+                builder: (context) => const WorkShiftPage(),
+              ),
+            );
+          },
         ),
       );
       return;
@@ -199,32 +183,6 @@ class _HomePageState extends ConsumerState<HomePage> {
     }
   }
 
-  void _showSuccessSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppTheme.primaryColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-        ),
-      ),
-    );
-  }
-
-  void _showErrorSnackBar(String message) {
-    ScaffoldMessenger.of(context).showSnackBar(
-      SnackBar(
-        content: Text(message),
-        backgroundColor: AppTheme.errorColor,
-        behavior: SnackBarBehavior.floating,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
-        ),
-        duration: const Duration(seconds: 5),
-      ),
-    );
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -493,7 +451,7 @@ class _HomePageState extends ConsumerState<HomePage> {
               onTap: () {
                 final workShiftState = ref.read(workShiftStateProvider);
                 if (!workShiftState.hasActiveShift) {
-                  _showErrorSnackBar('Debe abrir un turno para ver las ventas');
+                  context.showError('Debe abrir un turno para ver las ventas');
                   return;
                 }
                 Navigator.push(

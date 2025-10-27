@@ -66,12 +66,13 @@ class _CreateOrderPageState extends ConsumerState<CreateOrderPage> {
 
   void _addProduct(product) {
     if (!mounted) return;
-    
+
     try {
       ref.read(orderStateProvider.notifier).addProduct(
             productId: product.remoteId,
             productName: product.name,
             unitPrice: product.salePrice,
+            taxRate: product.taxRate, // Pasar el tax rate del producto
             quantity: 1,
           );
     } catch (e) {
@@ -179,10 +180,11 @@ class _CreateOrderPageState extends ConsumerState<CreateOrderPage> {
     final orderWithTotals = orderState.currentOrder!.copyWith(
       subtotal: orderState.subtotal,
       tax: orderState.tax,
+      tip: orderState.tip,
       total: orderState.total,
     );
 
-    print('DEBUG PAYMENT: Navegando a pago con totales - Subtotal: ${orderWithTotals.subtotal}, Tax: ${orderWithTotals.tax}, Total: ${orderWithTotals.total}');
+    print('DEBUG PAYMENT: Navegando a pago con totales - Subtotal: ${orderWithTotals.subtotal}, Tax: ${orderWithTotals.tax}, Tip: ${orderWithTotals.tip}, Total: ${orderWithTotals.total}');
 
     // Navegar a la pantalla de pago
     final result = await Navigator.push(
