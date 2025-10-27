@@ -504,7 +504,34 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                       ),
                     ],
                   ),
-                    
+
+                  const SizedBox(height: AppTheme.spacingSmall),
+
+                  // Botón facturar venta
+                  SizedBox(
+                    width: double.infinity,
+                    child: ElevatedButton.icon(
+                      onPressed: () {
+                        // TODO: Implementar funcionalidad de facturación
+                      },
+                      icon: const Icon(Icons.receipt_long, size: 18),
+                      label: const Text('Facturar venta'),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: AppTheme.primaryColor,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(vertical: 16),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                        ),
+                        elevation: 0,
+                        textStyle: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ),
+
                   // Pagos registrados
                   if (_payments.isNotEmpty) ...[
                     const SizedBox(height: AppTheme.spacingLarge),

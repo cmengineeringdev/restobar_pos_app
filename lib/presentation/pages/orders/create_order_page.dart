@@ -717,7 +717,7 @@ class _CreateOrderPageState extends ConsumerState<CreateOrderPage> {
                   ),
                 ),
                 const SizedBox(height: 8),
-                
+
                 // Botón para cancelar pedido
                 SizedBox(
                   width: double.infinity,

@@ -160,6 +160,28 @@ class _SaleDetailPageState extends ConsumerState<SaleDetailPage> {
                       _buildTotalsCard(),
                       const SizedBox(height: AppTheme.spacingMedium),
 
+                      // Botón facturar venta
+                      SizedBox(
+                        width: double.infinity,
+                        child: ElevatedButton.icon(
+                          onPressed: () {
+                            // TODO: Implementar funcionalidad de facturación
+                          },
+                          icon: const Icon(Icons.receipt_long, size: 18),
+                          label: const Text('Facturar venta'),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: AppTheme.primaryColor,
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                            ),
+                            elevation: 0,
+                          ),
+                        ),
+                      ),
+                      const SizedBox(height: AppTheme.spacingMedium),
+
                       // Pagos
                       if (_payments.isNotEmpty) ...[
                         _buildSectionTitle('Pagos Registrados'),
