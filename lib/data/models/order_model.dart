@@ -10,6 +10,7 @@ class OrderModel {
   final double tip;
   final double total;
   final String? notes;
+  final String? cancellationReason;
   final DateTime createdAt;
   final DateTime? updatedAt;
   final DateTime? closedAt;
@@ -24,6 +25,7 @@ class OrderModel {
     this.tip = 0,
     required this.total,
     this.notes,
+    this.cancellationReason,
     required this.createdAt,
     this.updatedAt,
     this.closedAt,
@@ -41,6 +43,7 @@ class OrderModel {
       tip: map['tip'] != null ? (map['tip'] as num).toDouble() : 0,
       total: (map['total'] as num).toDouble(),
       notes: map['notes'] as String?,
+      cancellationReason: map['cancellation_reason'] as String?,
       createdAt: DateTime.parse(map['created_at'] as String),
       updatedAt: map['updated_at'] != null
           ? DateTime.parse(map['updated_at'] as String)
@@ -63,6 +66,7 @@ class OrderModel {
       'tip': tip,
       'total': total,
       'notes': notes,
+      'cancellation_reason': cancellationReason,
       'created_at': createdAt.toIso8601String(),
       'updated_at': updatedAt?.toIso8601String(),
       'closed_at': closedAt?.toIso8601String(),
@@ -81,6 +85,7 @@ class OrderModel {
       tip: tip,
       total: total,
       notes: notes,
+      cancellationReason: cancellationReason,
       createdAt: createdAt,
       updatedAt: updatedAt,
       closedAt: closedAt,
@@ -99,6 +104,7 @@ class OrderModel {
       tip: order.tip,
       total: order.total,
       notes: order.notes,
+      cancellationReason: order.cancellationReason,
       createdAt: order.createdAt,
       updatedAt: order.updatedAt,
       closedAt: order.closedAt,

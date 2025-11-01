@@ -30,14 +30,20 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
   void initState() {
     super.initState();
     // Establecer propina: si es 0, calcular 10% del subtotal
-    _currentTip = widget.order.tip > 0 ? widget.order.tip : (widget.order.subtotal * 0.10);
-    // Por defecto, establecer el monto al total pendiente
-    _amountController.text = _calculatedTotal.toStringAsFixed(0);
+    _currentTip = _roundToTwoDecimals(widget.order.tip > 0 ? widget.order.tip : (widget.order.subtotal * 0.10));
+    // Por defecto, establecer el monto al total pendiente (redondeado a entero más cercano)
+    _amountController.text = _calculatedTotal.round().toString();
   }
 
-  double get _calculatedTotal => widget.order.subtotal + widget.order.tax + _currentTip;
-  double get _remaining => _calculatedTotal - _totalPaid;
-  bool get _isFullyPaid => _remaining <= 0.01; // Pequeña tolerancia para decimales
+  // Redondear a 2 decimales para evitar problemas de precisión de punto flotante
+  double get _calculatedTotal => _roundToTwoDecimals(widget.order.subtotal + widget.order.tax + _currentTip);
+  double get _remaining => _roundToTwoDecimals(_calculatedTotal - _totalPaid);
+  bool get _isFullyPaid => _remaining.abs() < 0.01; // Comparación estricta después del redondeo
+
+  // Redondear un número a 2 decimales
+  double _roundToTwoDecimals(double value) {
+    return (value * 100).round() / 100;
+  }
 
   void _addPayment() {
     final amount = double.tryParse(_amountController.text);
@@ -68,7 +74,12 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
       }
     });
 
-    _showSnackBar('Pago agregado', isError: false);
+
+    if (_isFullyPaid) {
+      _showSnackBar('Pago completo. Ya puede confirmar la orden', isError: false);
+    } else {
+      _showSnackBar('Pago agregado. Pendiente: ${CurrencyFormatter.format(_remaining)}', isError: false);
+    }
   }
 
   void _removePayment(int index) {
@@ -92,12 +103,12 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
 
   Future<void> _confirmPayments() async {
     if (_payments.isEmpty) {
-      _showSnackBar('No hay pagos para confirmar', isError: true);
+      _showSnackBar('Debe agregar al menos un pago antes de confirmar. Use el botón "Agregar Pago"', isError: true);
       return;
     }
 
     if (!_isFullyPaid) {
-      _showSnackBar('Debe completar el pago total de la orden', isError: true);
+      _showSnackBar('Debe completar el pago total de la orden. Pendiente: ${CurrencyFormatter.format(_remaining)}', isError: true);
       return;
     }
 
@@ -445,7 +456,7 @@ class _PaymentPageState extends ConsumerState<PaymentPage> {
                   ),
                   
                   const SizedBox(height: AppTheme.spacingLarge),
-                  
+
                   // Botones de acción
                   Row(
                     children: [

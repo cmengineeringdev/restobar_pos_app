@@ -202,86 +202,154 @@ class _CreateOrderPageState extends ConsumerState<CreateOrderPage> {
 
   Future<void> _showCancelOrderDialog() async {
     if (!mounted) return;
-    
-    final confirmed = await showDialog<bool>(
+
+    final cancellationReasonController = TextEditingController();
+
+    final result = await showDialog<Map<String, dynamic>>(
       context: context,
-      builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surfaceColor,
-        shape: RoundedRectangleBorder(
-          borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
-        ),
-        title: const Row(
-          children: [
-            Icon(Icons.warning_amber_rounded, color: AppTheme.errorColor, size: 24),
-            SizedBox(width: 8),
-            Text(
-              '¿Cancelar Pedido?',
-              style: TextStyle(
-                color: AppTheme.textPrimary,
-                fontSize: 18,
-                fontWeight: FontWeight.bold,
+      builder: (context) => StatefulBuilder(
+        builder: (context, setState) {
+          return AlertDialog(
+            backgroundColor: AppTheme.surfaceColor,
+            shape: RoundedRectangleBorder(
+              borderRadius: BorderRadius.circular(AppTheme.radiusMedium),
+            ),
+            title: const Row(
+              children: [
+                Icon(Icons.warning_amber_rounded, color: AppTheme.errorColor, size: 24),
+                SizedBox(width: 8),
+                Text(
+                  '¿Cancelar Pedido?',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 18,
+                    fontWeight: FontWeight.bold,
+                  ),
+                ),
+              ],
+            ),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  'Se cancelará el pedido de la Mesa ${widget.table.number} y la mesa volverá a estar disponible. Esta acción no se puede deshacer.',
+                  style: const TextStyle(
+                    color: AppTheme.textSecondary,
+                    fontSize: 14,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                const Text(
+                  'Motivo de la cancelación:',
+                  style: TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                TextField(
+                  controller: cancellationReasonController,
+                  autofocus: true,
+                  maxLines: 3,
+                  decoration: InputDecoration(
+                    hintText: 'Ingrese el motivo de la cancelación...',
+                    hintStyle: const TextStyle(
+                      color: AppTheme.textSecondary,
+                      fontSize: 13,
+                    ),
+                    filled: true,
+                    fillColor: AppTheme.backgroundColor,
+                    contentPadding: const EdgeInsets.all(12),
+                    border: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                      borderSide: const BorderSide(color: AppTheme.borderColor),
+                    ),
+                    enabledBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                      borderSide: const BorderSide(color: AppTheme.borderColor),
+                    ),
+                    focusedBorder: OutlineInputBorder(
+                      borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                      borderSide: const BorderSide(color: AppTheme.primaryColor),
+                    ),
+                  ),
+                  style: const TextStyle(
+                    color: AppTheme.textPrimary,
+                    fontSize: 14,
+                  ),
+                  onChanged: (value) {
+                    // Forzar reconstrucción para habilitar/deshabilitar el botón
+                    setState(() {});
+                  },
+                ),
+              ],
+            ),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.of(context).pop(null),
+                child: const Text(
+                  'No, mantener pedido',
+                  style: TextStyle(color: AppTheme.textSecondary),
+                ),
               ),
-            ),
-          ],
-        ),
-        content: Text(
-          'Se cancelará el pedido de la Mesa ${widget.table.number} y la mesa volverá a estar disponible. Esta acción no se puede deshacer.',
-          style: const TextStyle(
-            color: AppTheme.textSecondary,
-            fontSize: 14,
-          ),
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.of(context).pop(false),
-            child: const Text(
-              'No, mantener pedido',
-              style: TextStyle(color: AppTheme.textSecondary),
-            ),
-          ),
-          ElevatedButton(
-            onPressed: () => Navigator.of(context).pop(true),
-            style: ElevatedButton.styleFrom(
-              backgroundColor: AppTheme.errorColor,
-              foregroundColor: Colors.white,
-              shape: RoundedRectangleBorder(
-                borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+              ElevatedButton(
+                onPressed: cancellationReasonController.text.trim().isEmpty
+                    ? null
+                    : () => Navigator.of(context).pop({
+                          'confirmed': true,
+                          'reason': cancellationReasonController.text.trim(),
+                        }),
+                style: ElevatedButton.styleFrom(
+                  backgroundColor: AppTheme.errorColor,
+                  foregroundColor: Colors.white,
+                  disabledBackgroundColor: AppTheme.textDisabled,
+                  disabledForegroundColor: Colors.white70,
+                  shape: RoundedRectangleBorder(
+                    borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
+                  ),
+                  elevation: 0,
+                ),
+                child: const Text('Sí, cancelar'),
               ),
-              elevation: 0,
-            ),
-            child: const Text('Sí, cancelar'),
-          ),
-        ],
+            ],
+          );
+        },
       ),
     );
 
-    if (confirmed != true || !mounted) return;
+    cancellationReasonController.dispose();
+
+    if (result == null || result['confirmed'] != true || !mounted) return;
 
     try {
-      await ref.read(orderStateProvider.notifier).cancelOrder();
-      
+      await ref.read(orderStateProvider.notifier).cancelOrder(
+            cancellationReason: result['reason'],
+          );
+
       if (!mounted) return;
-      
+
       // Actualizar el estado de la mesa en el tableStateProvider
       await ref.read(tableStateProvider.notifier).updateTableStatus(
             widget.table.id!,
             'available',
           );
-      
-      // Mostrar mensaje de éxito
+
+      // Mostrar mensaje de éxito con el motivo
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(
-          content: Text('Pedido cancelado exitosamente'),
+        SnackBar(
+          content: Text('Pedido cancelado: ${result['reason']}'),
           backgroundColor: AppTheme.successColor,
-          duration: Duration(seconds: 2),
+          duration: const Duration(seconds: 2),
         ),
       );
-      
+
       // Volver a la pantalla anterior
       Navigator.of(context).pop();
     } catch (e) {
       if (!mounted) return;
-      
+
       // Mostrar mensaje de error
       ScaffoldMessenger.of(context).showSnackBar(
         SnackBar(

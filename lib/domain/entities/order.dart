@@ -8,6 +8,7 @@ class Order {
   final double tip; // Propina
   final double total;
   final String? notes; // Notas u observaciones del pedido
+  final String? cancellationReason; // Motivo de cancelación
   final DateTime createdAt;
   final DateTime? updatedAt;
   final DateTime? closedAt;
@@ -22,6 +23,7 @@ class Order {
     this.tip = 0,
     required this.total,
     this.notes,
+    this.cancellationReason,
     required this.createdAt,
     this.updatedAt,
     this.closedAt,
@@ -37,6 +39,7 @@ class Order {
     double? tip,
     double? total,
     String? notes,
+    String? cancellationReason,
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? closedAt,
@@ -51,6 +54,7 @@ class Order {
       tip: tip ?? this.tip,
       total: total ?? this.total,
       notes: notes ?? this.notes,
+      cancellationReason: cancellationReason ?? this.cancellationReason,
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       closedAt: closedAt ?? this.closedAt,

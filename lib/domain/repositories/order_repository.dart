@@ -48,6 +48,7 @@ abstract class OrderRepository {
   Future<void> updateOrderStatus({
     required int orderId,
     required String status,
+    String? cancellationReason,
   });
 
   /// Update order notes
@@ -64,6 +65,9 @@ abstract class OrderRepository {
 
   /// Get closed orders by work shift
   Future<List<Map<String, dynamic>>> getClosedOrdersByWorkShift(int workShiftId);
+
+  /// Get cancelled orders by work shift
+  Future<List<Map<String, dynamic>>> getCancelledOrdersByWorkShift(int workShiftId);
 
   /// Get order with details (items and payments)
   Future<Map<String, dynamic>> getOrderWithDetails(int orderId);

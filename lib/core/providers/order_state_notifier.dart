@@ -466,7 +466,7 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
   }
 
   /// Cancelar pedido actual
-  Future<void> cancelOrder() async {
+  Future<void> cancelOrder({required String cancellationReason}) async {
     if (state.currentOrder == null) {
       state = state.copyWith(error: 'No hay pedido activo para cancelar');
       return;
@@ -475,12 +475,13 @@ class OrderStateNotifier extends StateNotifier<OrderState> {
     state = state.copyWith(isLoading: true, clearError: true);
 
     try {
-      print('DEBUG ORDER: Cancelando pedido ${state.currentOrder!.id}');
+      print('DEBUG ORDER: Cancelando pedido ${state.currentOrder!.id} (motivo: $cancellationReason)');
 
       // Cancelar el pedido y liberar la mesa
       await _cancelOrder(
         orderId: state.currentOrder!.id!,
         tableId: state.currentOrder!.tableId,
+        cancellationReason: cancellationReason,
       );
 
       print('DEBUG ORDER: Pedido cancelado exitosamente');

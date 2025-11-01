@@ -89,13 +89,13 @@ BEGIN
     BEGIN
         BLOCK "040904e4"
         BEGIN
-            VALUE "CompanyName", "com.example" "\0"
-            VALUE "FileDescription", "restobar_pos_app" "\0"
+            VALUE "CompanyName", "com.cmengineering" "\0"
+            VALUE "FileDescription", "Restobar POS" "\0"
             VALUE "FileVersion", VERSION_AS_STRING "\0"
-            VALUE "InternalName", "restobar_pos_app" "\0"
+            VALUE "InternalName", "Restobar POS" "\0"
             VALUE "LegalCopyright", "Copyright (C) 2025 com.example. All rights reserved." "\0"
-            VALUE "OriginalFilename", "restobar_pos_app.exe" "\0"
-            VALUE "ProductName", "restobar_pos_app" "\0"
+            VALUE "OriginalFilename", "Restobar POS.exe" "\0"
+            VALUE "ProductName", "Restobar POS" "\0"
             VALUE "ProductVersion", VERSION_AS_STRING "\0"
         END
     END

@@ -175,9 +175,10 @@ class OrderRepositoryImpl implements OrderRepository {
   Future<void> updateOrderStatus({
     required int orderId,
     required String status,
+    String? cancellationReason,
   }) async {
     try {
-      await localDataSource.updateOrderStatus(orderId, status);
+      await localDataSource.updateOrderStatus(orderId, status, cancellationReason: cancellationReason);
     } catch (e) {
       throw Exception('Error updating order status: $e');
     }
@@ -219,6 +220,15 @@ class OrderRepositoryImpl implements OrderRepository {
       return await localDataSource.getClosedOrdersByWorkShift(workShiftId);
     } catch (e) {
       throw Exception('Error getting closed orders by work shift: $e');
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getCancelledOrdersByWorkShift(int workShiftId) async {
+    try {
+      return await localDataSource.getCancelledOrdersByWorkShift(workShiftId);
+    } catch (e) {
+      throw Exception('Error getting cancelled orders by work shift: $e');
     }
   }
 

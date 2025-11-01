@@ -1,6 +1,6 @@
 class ApiConstants {
   // Base URL
-  static const String baseUrl = 'http://localhost:5131';
+  static const String baseUrl = 'https://api.cmengineering.xyz';
 
   // Endpoints
   static const String productsEndpoint = '/api/product';

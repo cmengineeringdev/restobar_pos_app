@@ -30,7 +30,7 @@ class DatabaseService {
     Database db = await databaseFactoryFfi.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 12, // Incrementado para agregar tax_rate y tax_amount a order_items
+        version: 13, // Incrementado para agregar cancellation_reason a orders
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
       ),
@@ -150,6 +150,7 @@ class DatabaseService {
         tip REAL NOT NULL DEFAULT 0,
         total REAL NOT NULL DEFAULT 0,
         notes TEXT,
+        cancellation_reason TEXT,
         created_at TEXT NOT NULL,
         updated_at TEXT,
         closed_at TEXT
@@ -432,6 +433,13 @@ class DatabaseService {
       ''');
       await db.execute('''
         ALTER TABLE order_items ADD COLUMN tax_amount REAL NOT NULL DEFAULT 0
+      ''');
+    }
+
+    // Migration from version 12 to 13: Add cancellation_reason column to orders
+    if (oldVersion < 13) {
+      await db.execute('''
+        ALTER TABLE orders ADD COLUMN cancellation_reason TEXT
       ''');
     }
   }

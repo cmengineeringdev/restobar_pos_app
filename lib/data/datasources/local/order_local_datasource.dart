@@ -13,11 +13,12 @@ abstract class OrderLocalDataSource {
   Future<OrderModel?> getOrderById(int orderId);
   Future<List<OrderItemModel>> getOrderItems(int orderId);
   Future<void> updateOrder(OrderModel order);
-  Future<void> updateOrderStatus(int orderId, String status);
+  Future<void> updateOrderStatus(int orderId, String status, {String? cancellationReason});
   Future<void> updateOrderNotes(int orderId, String? notes);
   Future<void> closeOrder(int orderId);
   Future<Map<String, dynamic>> getWorkShiftSalesSummary(int workShiftId);
   Future<List<Map<String, dynamic>>> getClosedOrdersByWorkShift(int workShiftId);
+  Future<List<Map<String, dynamic>>> getCancelledOrdersByWorkShift(int workShiftId);
   Future<Map<String, dynamic>> getOrderWithDetails(int orderId);
 }
 
@@ -220,21 +221,28 @@ class OrderLocalDataSourceImpl implements OrderLocalDataSource {
   }
 
   @override
-  Future<void> updateOrderStatus(int orderId, String status) async {
+  Future<void> updateOrderStatus(int orderId, String status, {String? cancellationReason}) async {
     try {
       final db = await databaseService.database;
 
+      final updateData = {
+        'status': status,
+        'updated_at': DateTime.now().toIso8601String(),
+      };
+
+      // Si se proporciona un motivo de cancelación, agregarlo
+      if (cancellationReason != null) {
+        updateData['cancellation_reason'] = cancellationReason;
+      }
+
       await db.update(
         'orders',
-        {
-          'status': status,
-          'updated_at': DateTime.now().toIso8601String(),
-        },
+        updateData,
         where: 'id = ?',
         whereArgs: [orderId],
       );
 
-      print('DEBUG LOCAL ORDER: Status de orden $orderId actualizado a $status');
+      print('DEBUG LOCAL ORDER: Status de orden $orderId actualizado a $status${cancellationReason != null ? ' (motivo: $cancellationReason)' : ''}');
     } catch (e) {
       print('DEBUG LOCAL ORDER: Error al actualizar status de orden: $e');
       throw Exception('Error updating order status in local DB: $e');
@@ -330,6 +338,7 @@ class OrderLocalDataSourceImpl implements OrderLocalDataSource {
     }
   }
 
+  @override
   Future<List<Map<String, dynamic>>> getClosedOrdersByWorkShift(int workShiftId) async {
     try {
       final db = await databaseService.database;
@@ -355,6 +364,36 @@ class OrderLocalDataSourceImpl implements OrderLocalDataSource {
     } catch (e) {
       print('DEBUG LOCAL ORDER: Error al obtener órdenes cerradas: $e');
       throw Exception('Error getting closed orders from local DB: $e');
+    }
+  }
+
+  @override
+  Future<List<Map<String, dynamic>>> getCancelledOrdersByWorkShift(int workShiftId) async {
+    try {
+      final db = await databaseService.database;
+
+      final orders = await db.rawQuery('''
+        SELECT
+          id,
+          table_id,
+          subtotal,
+          tax,
+          total,
+          status,
+          notes,
+          cancellation_reason,
+          created_at,
+          closed_at
+        FROM orders
+        WHERE work_shift_id = ? AND status = 'cancelled'
+        ORDER BY closed_at DESC
+      ''', [workShiftId]);
+
+      print('DEBUG LOCAL ORDER: ${orders.length} órdenes canceladas encontradas para turno $workShiftId');
+      return orders;
+    } catch (e) {
+      print('DEBUG LOCAL ORDER: Error al obtener órdenes canceladas: $e');
+      throw Exception('Error getting cancelled orders from local DB: $e');
     }
   }
 

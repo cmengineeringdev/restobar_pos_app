@@ -14,18 +14,20 @@ class CancelOrder {
   Future<void> call({
     required int orderId,
     required int tableId,
+    required String cancellationReason,
   }) async {
     try {
-      // 1. Actualizar estado del pedido a 'cancelled'
+      // 1. Actualizar estado del pedido a 'cancelled' con el motivo
       await orderRepository.updateOrderStatus(
         orderId: orderId,
         status: 'cancelled',
+        cancellationReason: cancellationReason,
       );
 
       // 2. Actualizar estado de la mesa a 'available'
       await tableRepository.updateTableStatus(tableId, 'available');
 
-      print('DEBUG CANCEL ORDER: Pedido $orderId cancelado y mesa $tableId liberada');
+      print('DEBUG CANCEL ORDER: Pedido $orderId cancelado (motivo: $cancellationReason) y mesa $tableId liberada');
     } catch (e) {
       print('DEBUG CANCEL ORDER: Error al cancelar pedido: $e');
       throw Exception('Error cancelling order: $e');

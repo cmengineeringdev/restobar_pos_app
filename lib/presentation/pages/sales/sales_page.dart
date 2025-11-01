@@ -14,19 +14,28 @@ class SalesPage extends ConsumerStatefulWidget {
   ConsumerState<SalesPage> createState() => _SalesPageState();
 }
 
-class _SalesPageState extends ConsumerState<SalesPage> {
+class _SalesPageState extends ConsumerState<SalesPage> with TickerProviderStateMixin {
   List<Map<String, dynamic>> _closedOrders = [];
+  List<Map<String, dynamic>> _cancelledOrders = [];
   bool _isLoading = true;
+  late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
+    _tabController = TabController(length: 2, vsync: this);
     WidgetsBinding.instance.addPostFrameCallback((_) {
-      _loadClosedOrders();
+      _loadOrders();
     });
   }
 
-  Future<void> _loadClosedOrders() async {
+  @override
+  void dispose() {
+    _tabController.dispose();
+    super.dispose();
+  }
+
+  Future<void> _loadOrders() async {
     setState(() => _isLoading = true);
 
     try {
@@ -36,13 +45,15 @@ class _SalesPageState extends ConsumerState<SalesPage> {
       }
 
       final orderRepository = ref.read(orderRepositoryProvider);
-      final orders = await orderRepository.getClosedOrdersByWorkShift(
-        workShiftState.activeWorkShift!.localId!,
-      );
+      final workShiftId = workShiftState.activeWorkShift!.localId!;
+
+      final closedOrders = await orderRepository.getClosedOrdersByWorkShift(workShiftId);
+      final cancelledOrders = await orderRepository.getCancelledOrdersByWorkShift(workShiftId);
 
       if (mounted) {
         setState(() {
-          _closedOrders = orders;
+          _closedOrders = closedOrders;
+          _cancelledOrders = cancelledOrders;
           _isLoading = false;
         });
       }
@@ -86,10 +97,24 @@ class _SalesPageState extends ConsumerState<SalesPage> {
         surfaceTintColor: Colors.transparent,
         elevation: 0,
         bottom: PreferredSize(
-          preferredSize: const Size.fromHeight(1),
-          child: Container(
-            color: AppTheme.borderColor,
-            height: 1,
+          preferredSize: const Size.fromHeight(49),
+          child: Column(
+            children: [
+              Container(
+                color: AppTheme.borderColor,
+                height: 1,
+              ),
+              TabBar(
+                controller: _tabController,
+                tabs: const [
+                  Tab(text: 'Completadas'),
+                  Tab(text: 'Canceladas'),
+                ],
+                labelColor: AppTheme.primaryColor,
+                unselectedLabelColor: AppTheme.textSecondary,
+                indicatorColor: AppTheme.primaryColor,
+              ),
+            ],
           ),
         ),
         title: const Text(
@@ -104,7 +129,7 @@ class _SalesPageState extends ConsumerState<SalesPage> {
         actions: [
           IconButton(
             icon: const Icon(Icons.refresh),
-            onPressed: _loadClosedOrders,
+            onPressed: _loadOrders,
             tooltip: 'Actualizar',
           ),
         ],
@@ -115,53 +140,109 @@ class _SalesPageState extends ConsumerState<SalesPage> {
                 valueColor: AlwaysStoppedAnimation<Color>(AppTheme.primaryColor),
               ),
             )
-          : _closedOrders.isEmpty
-              ? Center(
-                  child: Column(
-                    mainAxisAlignment: MainAxisAlignment.center,
-                    children: [
-                      Icon(
-                        Icons.receipt_long_outlined,
-                        size: 64,
-                        color: AppTheme.textDisabled,
-                      ),
-                      const SizedBox(height: AppTheme.spacingMedium),
-                      const Text(
-                        'No hay ventas registradas',
-                        style: TextStyle(
-                          color: AppTheme.textPrimary,
-                          fontSize: 16,
-                          fontWeight: FontWeight.w600,
+          : TabBarView(
+              controller: _tabController,
+              children: [
+                // Tab de órdenes completadas
+                _closedOrders.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.receipt_long_outlined,
+                              size: 64,
+                              color: AppTheme.textDisabled,
+                            ),
+                            const SizedBox(height: AppTheme.spacingMedium),
+                            const Text(
+                              'No hay ventas completadas',
+                              style: TextStyle(
+                                color: AppTheme.textPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: AppTheme.spacingSmall),
+                            const Text(
+                              'Las órdenes completadas aparecerán aquí',
+                              style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
                         ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(AppTheme.spacingMedium),
+                        itemCount: _closedOrders.length,
+                        itemBuilder: (context, index) {
+                          final order = _closedOrders[index];
+                          return _buildOrderCard(order, isCompleted: true);
+                        },
                       ),
-                      const SizedBox(height: AppTheme.spacingSmall),
-                      const Text(
-                        'Las órdenes completadas aparecerán aquí',
-                        style: TextStyle(
-                          color: AppTheme.textSecondary,
-                          fontSize: 13,
+                // Tab de órdenes canceladas
+                _cancelledOrders.isEmpty
+                    ? Center(
+                        child: Column(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Icon(
+                              Icons.cancel_outlined,
+                              size: 64,
+                              color: AppTheme.textDisabled,
+                            ),
+                            const SizedBox(height: AppTheme.spacingMedium),
+                            const Text(
+                              'No hay ventas canceladas',
+                              style: TextStyle(
+                                color: AppTheme.textPrimary,
+                                fontSize: 16,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            ),
+                            const SizedBox(height: AppTheme.spacingSmall),
+                            const Text(
+                              'Las órdenes canceladas aparecerán aquí',
+                              style: TextStyle(
+                                color: AppTheme.textSecondary,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ],
                         ),
+                      )
+                    : ListView.builder(
+                        padding: const EdgeInsets.all(AppTheme.spacingMedium),
+                        itemCount: _cancelledOrders.length,
+                        itemBuilder: (context, index) {
+                          final order = _cancelledOrders[index];
+                          return _buildOrderCard(order, isCompleted: false);
+                        },
                       ),
-                    ],
-                  ),
-                )
-              : ListView.builder(
-                  padding: const EdgeInsets.all(AppTheme.spacingMedium),
-                  itemCount: _closedOrders.length,
-                  itemBuilder: (context, index) {
-                    final order = _closedOrders[index];
-                    return _buildOrderCard(order);
-                  },
-                ),
+              ],
+            ),
     );
   }
 
-  Widget _buildOrderCard(Map<String, dynamic> order) {
+  Widget _buildOrderCard(Map<String, dynamic> order, {required bool isCompleted}) {
     final orderId = order['id'] as int;
     final tableId = order['table_id'] as int;
     final total = (order['total'] as num).toDouble();
     final closedAt = order['closed_at'] as String?;
     final notes = order['notes'] as String?;
+    final cancellationReason = order['cancellation_reason'] as String?;
+
+    final statusColor = isCompleted ? AppTheme.successColor : AppTheme.errorColor;
+    final statusBgColor = isCompleted
+        ? AppTheme.successColor.withOpacity(0.1)
+        : AppTheme.errorColor.withOpacity(0.1);
+    final statusText = isCompleted ? 'Completada' : 'Cancelada';
+    final iconColor = isCompleted ? AppTheme.primaryColor : AppTheme.errorColor;
+    final iconBgColor = isCompleted
+        ? AppTheme.primaryColor.withOpacity(0.1)
+        : AppTheme.errorColor.withOpacity(0.1);
 
     return Card(
       margin: const EdgeInsets.only(bottom: AppTheme.spacingMedium),
@@ -190,12 +271,12 @@ class _SalesPageState extends ConsumerState<SalesPage> {
                 width: 48,
                 height: 48,
                 decoration: BoxDecoration(
-                  color: AppTheme.primaryColor.withOpacity(0.1),
+                  color: iconBgColor,
                   borderRadius: BorderRadius.circular(AppTheme.radiusSmall),
                 ),
-                child: const Icon(
-                  Icons.receipt_long,
-                  color: AppTheme.primaryColor,
+                child: Icon(
+                  isCompleted ? Icons.receipt_long : Icons.cancel,
+                  color: iconColor,
                   size: 24,
                 ),
               ),
@@ -223,15 +304,15 @@ class _SalesPageState extends ConsumerState<SalesPage> {
                             vertical: 2,
                           ),
                           decoration: BoxDecoration(
-                            color: AppTheme.successColor.withOpacity(0.1),
+                            color: statusBgColor,
                             borderRadius: BorderRadius.circular(4),
                           ),
-                          child: const Text(
-                            'Pagada',
+                          child: Text(
+                            statusText,
                             style: TextStyle(
                               fontSize: 11,
                               fontWeight: FontWeight.w600,
-                              color: AppTheme.successColor,
+                              color: statusColor,
                             ),
                           ),
                         ),
@@ -245,7 +326,19 @@ class _SalesPageState extends ConsumerState<SalesPage> {
                         color: AppTheme.textSecondary,
                       ),
                     ),
-                    if (notes != null && notes.isNotEmpty) ...[
+                    if (!isCompleted && cancellationReason != null && cancellationReason.isNotEmpty) ...[
+                      const SizedBox(height: 2),
+                      Text(
+                        'Motivo: $cancellationReason',
+                        style: const TextStyle(
+                          fontSize: 12,
+                          color: AppTheme.errorColor,
+                          fontStyle: FontStyle.italic,
+                        ),
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                      ),
+                    ] else if (isCompleted && notes != null && notes.isNotEmpty) ...[
                       const SizedBox(height: 2),
                       Text(
                         notes,
@@ -276,10 +369,10 @@ class _SalesPageState extends ConsumerState<SalesPage> {
                 children: [
                   Text(
                     CurrencyFormatter.format(total),
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 18,
                       fontWeight: FontWeight.bold,
-                      color: AppTheme.primaryColor,
+                      color: isCompleted ? AppTheme.primaryColor : AppTheme.errorColor,
                     ),
                   ),
                   const SizedBox(height: 4),
